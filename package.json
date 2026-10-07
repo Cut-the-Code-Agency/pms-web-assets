@@ -1,0 +1,15 @@
+{
+  "name": "pms-web-assets",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "esbuild src/chromite.js --bundle --format=esm --minify --target=es2020 --outfile=dist/chromite.js"
+  },
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "three": "^0.170.0"
+  },
+  "private": "true"
+}
