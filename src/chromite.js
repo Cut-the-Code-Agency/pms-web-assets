@@ -16,6 +16,7 @@
 //   data-chromite-end="#next"       hero: tot waar de laag loopt (standaard het element na de hero)
 //   data-chromite-turns="1"         extra keer rond over het scrollbereik
 //   data-chromite-material="stone"  "stone" (niet-metaal) of "metal" (zoals aangeleverd)
+//   data-chromite-tilt="90"         kanteling in het beeld in graden (0 = rechtop, 90 = liggend)
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -87,6 +88,7 @@ async function mount(wrap) {
   const heroMode = wrap.dataset.chromiteMode === 'hero';
   const turns = parseFloat(wrap.dataset.chromiteTurns || '1');
   const asStone = (wrap.dataset.chromiteMaterial || 'stone') !== 'metal';
+  const tilt = THREE.MathUtils.degToRad(parseFloat(wrap.dataset.chromiteTilt || '0'));
 
   let stage = wrap;
   let trigger;
@@ -158,7 +160,10 @@ async function mount(wrap) {
   holder.add(model);
   holder.rotation.x = Math.PI / 2;
   holder.scale.setScalar(2.2 / Math.max(size.x, size.y, size.z));
-  spinner.add(holder);
+  const tilter = new THREE.Group();
+  tilter.rotation.z = tilt;
+  tilter.add(holder);
+  spinner.add(tilter);
 
   model.traverse(o => {
     if (o.isMesh && asStone) {
