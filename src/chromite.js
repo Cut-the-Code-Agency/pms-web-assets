@@ -46,7 +46,8 @@ function hasWebGL() {
 
 async function mount(wrap) {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const trigger = document.querySelector(wrap.dataset.chromiteTrigger || '') || wrap.closest('section') || wrap;
+  const triggerSelector = wrap.dataset.chromiteTrigger;
+  const trigger = (triggerSelector && document.querySelector(triggerSelector)) || wrap.closest('section') || wrap;
   const turns = parseFloat(wrap.dataset.chromiteTurns || '1');
   const asStone = (wrap.dataset.chromiteMaterial || 'stone') !== 'metal';
 
