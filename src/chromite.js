@@ -17,6 +17,13 @@
 //   data-chromite-turns="1"         extra keer rond over het scrollbereik
 //   data-chromite-material="stone"  "stone" (niet-metaal) of "metal" (zoals aangeleverd)
 //   data-chromite-tilt="90"         kanteling in het beeld in graden (0 = rechtop, 90 = liggend)
+//   data-chromite-land=".slider_list > :first-child .card_primary_visual"
+//                                   hero: element waarin de steen landt (bv. de beeldplek van de eerste
+//                                   slide). De steen vliegt erheen als die sectie in beeld komt, volgt het
+//                                   daarna (ook als de slider schuift) en wordt afgeknipt aan de randen van
+//                                   de slider. Afbeeldingen in het landingsvlak worden verborgen.
+//   data-chromite-clip=".slider_element"  hero + land: waaraan de steen wordt afgeknipt
+//                                   (standaard de dichtstbijzijnde .swiper rond het landingsvlak)
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -60,9 +67,18 @@ function pick(selector, fallback) {
 
 // Hero-modus: het vlak wordt een laag over hero + volgende sectie, met daarin een
 // canvas dat vast in beeld blijft (sticky) tot de laag ophoudt
-function setupHeroLayer(wrap) {
+function setupHeroLayer(wrap, landing) {
   const hero = pick(wrap.dataset.chromiteTrigger, wrap.nextElementSibling);
   const end = pick(wrap.dataset.chromiteEnd, hero && hero.nextElementSibling) || hero;
+
+  // Met een landingsvlak blijft de laag de hele pagina vast in beeld; de steen volgt dat vlak
+  if (landing) {
+    Object.assign(wrap.style, {
+      position: 'fixed', top: '0', left: '0', width: '100%', height: '100vh', maxWidth: 'none',
+      margin: '0', aspectRatio: 'auto', zIndex: '1', pointerEvents: 'none',
+    });
+    return { stage: wrap, hero };
+  }
 
   Object.assign(wrap.style, {
     position: 'absolute', left: '0', width: '100%', maxWidth: 'none', margin: '0',
@@ -90,10 +106,13 @@ async function mount(wrap) {
   const asStone = (wrap.dataset.chromiteMaterial || 'stone') !== 'metal';
   const tilt = THREE.MathUtils.degToRad(parseFloat(wrap.dataset.chromiteTilt || '0'));
 
+  const landing = heroMode ? pick(wrap.dataset.chromiteLand, null) : null;
+  const clipEl = landing && (pick(wrap.dataset.chromiteClip, null) || landing.closest('.swiper') || landing.parentElement);
+
   let stage = wrap;
   let trigger;
   if (heroMode) {
-    ({ stage, hero: trigger } = setupHeroLayer(wrap));
+    ({ stage, hero: trigger } = setupHeroLayer(wrap, landing));
   } else {
     trigger = pick(wrap.dataset.chromiteTrigger, wrap.closest('section') || wrap);
     if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
@@ -146,6 +165,18 @@ async function mount(wrap) {
     return halfW * (camera.aspect < 1 ? 0.7 : 0.92);
   }
 
+  // Schermrechthoek → positie en schaal in de scene (vlak z = 0)
+  function poseFor(rect) {
+    const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z;
+    const halfW = halfH * camera.aspect;
+    const vw = stage.clientWidth, vh = stage.clientHeight;
+    const x = ((rect.left + rect.width / 2) / vw - 0.5) * 2 * halfW;
+    const y = (0.5 - (rect.top + rect.height / 2) / vh) * 2 * halfH;
+    // Lengte van de steen ≈ 75% van de breedte van het vlak, maar niet hoger dan het vlak
+    const size = Math.min(rect.width / vw * 2 * halfW * 0.75, rect.height / vh * 2 * halfH * 1.4);
+    return { x, y, s: size / 2.2 };
+  }
+
   const [gltf, gsap] = await Promise.all([
     new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(MODEL_URL),
     reduceMotion ? null : ensureGsap(),
@@ -172,15 +203,44 @@ async function mount(wrap) {
     }
   });
 
+  // hero: 0 → 1 tijdens de hero (midden → rechts); land: 0 → 1 als de landingssectie in beeld komt
+  const progress = { hero: 0, land: 0 };
+  if (landing) landing.querySelectorAll('img').forEach(img => { img.style.opacity = '0'; });
+
+  function updatePose() {
+    const right = rightEdgeX();
+    let x = right * progress.hero;
+    let y = 0;
+    let s = 1 + (HERO_END_SCALE - 1) * progress.hero;
+    canvas.style.clipPath = '';
+    if (landing && progress.land > 0) {
+      const t = poseFor(landing.getBoundingClientRect());
+      x += (t.x - x) * progress.land;
+      y += (t.y - y) * progress.land;
+      s += (t.s - s) * progress.land;
+      // Geland: afknippen aan de slider, zodat de steen er niet buiten uitsteekt bij het schuiven
+      if (progress.land > 0.98 && clipEl) {
+        const c = clipEl.getBoundingClientRect();
+        const vw = stage.clientWidth, vh = stage.clientHeight;
+        canvas.style.clipPath = `inset(${Math.max(c.top, 0)}px ${Math.max(vw - c.right, 0)}px ${Math.max(vh - c.bottom, 0)}px ${Math.max(c.left, 0)}px)`;
+      }
+    }
+    mover.position.set(x, y, 0);
+    mover.scale.setScalar(s);
+  }
+
   if (gsap) {
     const tl = gsap.timeline({
       scrollTrigger: { trigger, start: 'top top', end: 'bottom top', scrub: 1, invalidateOnRefresh: true },
     });
     tl.to(scroller.rotation, { y: Math.PI * 2 * turns, ease: 'none', duration: 1 }, 0)
       .to(scroller.rotation, { x: 0.35, ease: 'sine.inOut', yoyo: true, repeat: 1, duration: 0.5 }, 0);
-    if (heroMode) {
-      tl.to(mover.position, { x: () => rightEdgeX(), ease: 'power1.inOut', duration: 1 }, 0)
-        .to(mover.scale, { x: HERO_END_SCALE, y: HERO_END_SCALE, z: HERO_END_SCALE, ease: 'power1.inOut', duration: 1 }, 0);
+    if (heroMode) tl.to(progress, { hero: 1, ease: 'power1.inOut', duration: 1 }, 0);
+    if (landing) {
+      gsap.to(progress, {
+        land: 1, ease: 'power2.inOut',
+        scrollTrigger: { trigger: landing.closest('section') || landing, start: 'top bottom', end: 'center center', scrub: 1 },
+      });
     }
   } else {
     scroller.rotation.set(0.2, 0.6, 0);
@@ -194,6 +254,7 @@ async function mount(wrap) {
     const dt = Math.min(clock.getDelta(), 0.1);
     if (!visible || document.hidden) return;
     if (heroMode && !reduceMotion) spinner.rotation.y += dt * IDLE_SPEED;
+    if (heroMode) updatePose();
     renderer.render(scene, camera);
   });
 
