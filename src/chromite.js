@@ -211,7 +211,9 @@ async function mount(wrap) {
     const right = rightEdgeX();
     let x = right * progress.hero;
     let y = 0;
-    let s = 1 + (HERO_END_SCALE - 1) * progress.hero;
+    // Smal en hoog scherm (telefoon, tablet staand): maat volgt de breedte, anders vult hij het scherm
+    const base = camera.aspect < 1 ? Math.max(0.55, camera.aspect * 1.2) : 1;
+    let s = base * (1 + (HERO_END_SCALE - 1) * progress.hero);
     canvas.style.clipPath = '';
     if (landing && progress.land > 0) {
       const t = poseFor(landing.getBoundingClientRect());

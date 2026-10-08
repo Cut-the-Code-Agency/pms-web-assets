@@ -9,7 +9,7 @@ Bestanden die de PMS-website (Webflow) laadt via jsDelivr. **Openbaar**: zet hie
 In Webflow, custom code van de home (voor `</body>`):
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.3.0/dist/chromite.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.3.1/dist/chromite.js"></script>
 ```
 
 Markup in de hero:
