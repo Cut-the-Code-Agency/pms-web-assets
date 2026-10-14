@@ -36,11 +36,23 @@ In Webflow staat het script site-breed (footer):
 
 Markup (in de component Card Primary): `data-card-hover="card"` op de groep, `marker`, `title`, `text`, `image` op de onderdelen. Rust-stand staat in de classes (vierkantje `scale(0)`, titel `translateX(-…)`, tekst `height: 0; opacity: 0`). Varianten die de foto laten zoomen: `ZOOM` in `src/card-hover.js` (op variant-id).
 
+## Link preview (Services Overview op Home)
+
+Lijst met links waarbij een foto meekomt. Desktop (muis, ≥ 992 px): bij hover schaalt de foto van die link in vanuit linksboven op de cursor, volgt de muis met easing en schuift naar de foto van een andere link; het nummer wordt blauw. Mobiel en tablet: de link in het midden van het scherm is actief en zijn foto schuift achter de lijst het beeld in (vanuit de scrollrichting). Gebruikt de GSAP (+ CustomEase) die Webflow laadt; laadt zelf niets. Gebouwd als IIFE, zodat het niet botst met `card-hover.js`.
+
+In Webflow site-breed (footer):
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.5.0/dist/link-preview.js"></script>
+```
+
+Markup: `data-link-preview="section"` op de wrapper, `list`, `item` (component Service Link), `image` (verborgen houder met de foto), `preview` (desktop-vlak), `stage` (mobiel sticky vlak). Het nummer `.service-link_number` krijgt `is-active`.
+
 ## Wijzigen
 
 ```sh
 npm install
-npm run build        # src/chromite.js → dist/chromite.js, src/card-hover.js → dist/card-hover.js
+npm run build        # src/chromite.js → dist/chromite.js, src/card-hover.js → dist/card-hover.js, src/link-preview.js → dist/link-preview.js
 npx serve .          # test.html bekijken
 ```
 
