@@ -38,12 +38,12 @@ Markup (in de component Card Primary): `data-card-hover="card"` op de groep, `ma
 
 ## Link preview (Services Overview op Home)
 
-Lijst met links waarbij een foto meekomt. Desktop (muis, ≥ 992 px): bij hover schaalt de foto van die link in vanuit linksboven op de cursor, volgt de muis met easing en schuift naar de foto van een andere link; het nummer wordt blauw. Mobiel en tablet: de link in het midden van het scherm is actief en zijn foto schuift achter de lijst het beeld in (vanuit de scrollrichting). Gebruikt de GSAP (+ CustomEase) die Webflow laadt; laadt zelf niets. Gebouwd als IIFE, zodat het niet botst met `card-hover.js`.
+Lijst met links waarbij een foto meekomt. Desktop (muis, ≥ 992 px): bij hover schaalt de foto van die link in vanuit linksboven op de cursor, volgt de muis met easing en schuift naar de foto van een andere link; het nummer wordt blauw. Mobiel en tablet: de link in het midden van het scherm is actief (nummer blauw); pas als het scrollen 250 ms stilstaat vloeit de foto van die link langzaam over (1,2 s), zodat snel scrollen niet alle foto's langs laat flitsen. Gebruikt de GSAP (+ CustomEase) die Webflow laadt; laadt zelf niets. Gebouwd als IIFE, zodat het niet botst met `card-hover.js`.
 
 In Webflow site-breed (footer):
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.5.0/dist/link-preview.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.7.0/dist/link-preview.js"></script>
 ```
 
 Markup: `data-link-preview="section"` op de wrapper, `list`, `item` (component Service Link), `image` (verborgen houder met de foto), `preview` (desktop-vlak), `stage` (mobiel sticky vlak). Het nummer `.service-link_number` krijgt `is-active`.

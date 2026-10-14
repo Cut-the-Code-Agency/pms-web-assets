@@ -12,13 +12,15 @@
 //
 // Desktop (muis, ≥ 992 px): bij hover over een item schaalt de foto in vanuit linksboven op de
 // cursor, volgt de muis met easing en schuift naar de foto van een ander item. Mobiel en tablet:
-// het item in het midden van het scherm is actief; zijn foto schuift achter de lijst het beeld in.
-// Timing: decisions/motion.md (hover 450/250 ms, position 750 ms).
+// het item in het midden van het scherm is actief (nummer blauw); pas als het scrollen stilstaat
+// vloeit de foto van dat item langzaam over, zodat snel scrollen niet alle foto's langs laat flitsen.
+// Timing: decisions/motion.md (hover 450/250 ms).
 
 const IN = 0.45;
 const OUT = 0.25;
 const SWAP = 0.45; // foto wisselen in het kleine vlak
-const WIPE = 0.75; // foto wisselen schermvullend (mobiel)
+const FADE = 1.2; // foto wisselen schermvullend (mobiel), langzaam overvloeien
+const SETTLE = 250; // ms stilstand na het scrollen voordat de foto wisselt
 const FOLLOW = 0.6; // naijlen van de foto achter de muis
 const OFFSET = 24; // px tussen cursor en linkerbovenhoek van de foto
 
@@ -26,11 +28,12 @@ function init() {
   const gsap = window.gsap;
   if (!gsap) return;
 
-  const ease = { in: 'power2.inOut', out: 'power2.inOut', follow: 'power3.out' };
+  const ease = { in: 'power2.inOut', out: 'power2.inOut', fade: 'sine.inOut', follow: 'power3.out' };
   if (window.CustomEase) {
     gsap.registerPlugin(window.CustomEase);
     ease.in = window.CustomEase.create('pmsHoverIn', '0.75,0,0.5,1');
     ease.out = window.CustomEase.create('pmsHoverOut', '0.5,0,0.75,1');
+    ease.fade = window.CustomEase.create('pmsFade', '0.5,0,0.5,1');
   }
 
   const desktop = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 992px)');
@@ -60,7 +63,7 @@ function init() {
           img.src = src.currentSrc || src.src;
         }
         holder.insertBefore(img, before || null);
-        gsap.set(img, { clipPath: 'inset(0% 0% 100% 0%)', zIndex: 0 });
+        gsap.set(img, holder === stage ? { opacity: 0, zIndex: 0 } : { clipPath: 'inset(0% 0% 100% 0%)', zIndex: 0 });
         return img;
       });
 
@@ -174,8 +177,31 @@ function init() {
     });
 
     // ---- Mobiel en tablet: actief item = het item in het midden van het scherm ----
+    // De foto volgt pas als het scrollen SETTLE ms stilstaat, en vloeit dan over (opacity).
+    let photo = -1;
+    let settle = 0;
+    const fade = (index, instant) => {
+      if (index === photo || !large[index]) return;
+      const from = photo;
+      photo = index;
+      const img = large[index];
+      gsap.killTweensOf(large); // een lopende overgang blijft staan; de nieuwe foto komt eroverheen
+      large.forEach((other, i) => gsap.set(other, { zIndex: i === index ? 2 : i === from ? 1 : 0 }));
+      if (instant || from < 0 || reduce.matches) {
+        large.forEach((other, i) => gsap.set(other, { opacity: i === index ? 1 : 0, scale: 1 }));
+        return;
+      }
+      gsap.fromTo(img, { opacity: 0, scale: 1.04 }, {
+        opacity: 1,
+        scale: 1,
+        duration: FADE,
+        ease: ease.fade,
+        onComplete: () => large.forEach((other, i) => i !== index && gsap.set(other, { opacity: 0 })),
+      });
+    };
+
     let ticking = false;
-    const pick = () => {
+    const pick = (instant) => {
       ticking = false;
       if (desktop.matches || !stage) return;
       const middle = window.innerHeight / 2;
@@ -189,7 +215,13 @@ function init() {
           best = index;
         }
       });
-      activate(best, large, t(WIPE));
+      if (best !== active) {
+        active = best;
+        mark(best);
+      }
+      clearTimeout(settle);
+      if (instant === true) fade(best, true);
+      else settle = setTimeout(() => fade(best), SETTLE);
     };
     const onScroll = () => {
       if (!ticking) {
@@ -203,13 +235,16 @@ function init() {
     // Wisselen tussen desktop en mobiel: alles terug naar rust.
     const reset = () => {
       gsap.killTweensOf([preview, ...small, ...large].filter(Boolean));
-      [...small, ...large].forEach((img) => gsap.set(img, { clipPath: 'inset(0% 0% 100% 0%)', scale: 1, zIndex: 0 }));
+      small.forEach((img) => gsap.set(img, { clipPath: 'inset(0% 0% 100% 0%)', scale: 1, zIndex: 0 }));
+      large.forEach((img) => gsap.set(img, { opacity: 0, scale: 1, zIndex: 0 }));
+      clearTimeout(settle);
+      photo = -1;
       if (preview) gsap.set(preview, { opacity: 0, scale: 0 });
       follow();
       shown = false;
       active = -1;
       mark(-1);
-      if (!desktop.matches) pick();
+      if (!desktop.matches) pick(true);
     };
     desktop.addEventListener('change', reset);
     reset();
