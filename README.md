@@ -24,11 +24,23 @@ Hero-modus (`data-chromite-mode="hero"`): zet het vlak als eerste element vóór
 
 Opties op `[data-chromite]`: `data-chromite-mode` (`inline` of `hero`), `data-chromite-end` (hero: tot waar de laag loopt), `data-chromite-tilt` (kanteling in graden, 90 = liggend), `data-chromite-land` (hero: selector van het vlak waarin de steen landt, bv. de beeldplek van de eerste slide; de steen volgt dat vlak daarna en wordt afgeknipt aan de slider), `data-chromite-clip`, `data-chromite-trigger` (selector van het scrollbereik, standaard de dichtstbijzijnde `<section>`), `data-chromite-turns` (standaard `1`), `data-chromite-material` (`stone` of `metal`).
 
+## Card hover (Card Primary)
+
+Hover van de kaarten: vierkantje schaalt in vanuit linksboven, titel schuift mee, tekst schuift open (Certificate, CTA), foto zoomt (CTA). Erin 450 ms, eruit 250 ms; een onderbroken hover keert terug vanaf de huidige stand. Gebruikt de GSAP (+ CustomEase) die Webflow laadt; laadt zelf niets. Alleen met muis en vanaf 768 px; op mobiel doet Webflow Interactions de CTA (uitschuiven bij scrollen).
+
+In Webflow staat het script site-breed (footer):
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.4.0/dist/card-hover.js"></script>
+```
+
+Markup (in de component Card Primary): `data-card-hover="card"` op de groep, `marker`, `title`, `text`, `image` op de onderdelen. Rust-stand staat in de classes (vierkantje `scale(0)`, titel `translateX(-…)`, tekst `height: 0; opacity: 0`). Varianten die de foto laten zoomen: `ZOOM` in `src/card-hover.js` (op variant-id).
+
 ## Wijzigen
 
 ```sh
 npm install
-npm run build        # src/chromite.js → dist/chromite.js
+npm run build        # src/chromite.js → dist/chromite.js, src/card-hover.js → dist/card-hover.js
 npx serve .          # test.html bekijken
 ```
 
