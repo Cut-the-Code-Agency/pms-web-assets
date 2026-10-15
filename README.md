@@ -48,11 +48,23 @@ In Webflow site-breed (footer):
 
 Markup: `data-link-preview="section"` op de wrapper, `list`, `item` (component Service Link), `image` (verborgen houder met de foto), `preview` (desktop-vlak), `stage` (mobiel sticky vlak). Het nummer `.service-link_number` krijgt `is-active`.
 
+## Count-up (cijfers die optellen)
+
+Een getal telt op van 0 naar de waarde die in Webflow staat (`30%`, `1.200+`, `€ 4,5 mln`): voor- en achtervoegsel, decimalen en scheidingstekens blijven zoals in Webflow. Begint als het blok in beeld komt én zichtbaar is, zodat een Webflow-interaction die het blok laat infaden het startmoment bepaalt; na 4 s telt het hoe dan ook. 1,6 s per getal. Met `prefers-reduced-motion` blijft de eindwaarde staan. Gebruikt de GSAP (+ CustomEase) die Webflow laadt; laadt zelf niets. IIFE.
+
+In Webflow site-breed (footer):
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.8.0/dist/count-up.js"></script>
+```
+
+Markup: `data-count-up` op het blok met het getal (bij Lumos `Block`: props Attribute Name/Value); de waarde is een extra wachttijd in seconden (`0` = meteen). Het eerste stuk tekst met cijfers in het blok telt op. Eerste toepassing: de vier cijfers in de Home Hero.
+
 ## Wijzigen
 
 ```sh
 npm install
-npm run build        # src/chromite.js → dist/chromite.js, src/card-hover.js → dist/card-hover.js, src/link-preview.js → dist/link-preview.js
+npm run build        # src/*.js → dist/*.js (chromite, card-hover, link-preview, minerals-filter, count-up)
 npx serve .          # test.html bekijken
 ```
 
