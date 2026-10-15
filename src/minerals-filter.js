@@ -9,6 +9,7 @@
 //     [data-filter-item]              één item per mineraal
 //       [data-industry="<slug>"]      verborgen, één per gekoppelde industrie (geneste lijst)
 //
+// Knoppen zonder mineralen: disabled + class is-disabled (niet klikbaar).
 // Actieve knop: class is-active + aria-pressed. Lijst krijgt is-filtered zolang er een
 // industrie gekozen is (de trap in het raster geldt alleen bij "View all", zie de page-CSS).
 // Keuze in de URL (?industry=<slug>) zodat een gefilterde lijst te delen is.
@@ -24,6 +25,17 @@ function init() {
     item,
     new Set([...item.querySelectorAll('[data-industry]')].map((el) => el.getAttribute('data-industry'))),
   ]));
+
+  // Industrieën zonder mineralen uitschakelen.
+  buttons.forEach((btn) => {
+    const slug = btn.getAttribute('data-filter');
+    if (slug === 'all') return;
+    const empty = !items.some((item) => tags.get(item).has(slug));
+    btn.disabled = empty;
+    btn.classList.toggle('is-disabled', empty);
+    if (empty) btn.setAttribute('aria-disabled', 'true');
+    else btn.removeAttribute('aria-disabled');
+  });
 
   const apply = (slug, push) => {
     const all = !slug || slug === 'all';
@@ -50,7 +62,7 @@ function init() {
   });
 
   const start = new URLSearchParams(window.location.search).get('industry');
-  if (start && buttons.some((btn) => btn.getAttribute('data-filter') === start)) apply(start, false);
+  if (start && buttons.some((btn) => btn.getAttribute('data-filter') === start && !btn.disabled)) apply(start, false);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
