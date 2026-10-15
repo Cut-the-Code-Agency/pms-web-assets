@@ -24,6 +24,22 @@ Hero-modus (`data-chromite-mode="hero"`): zet het vlak als eerste element vóór
 
 Opties op `[data-chromite]`: `data-chromite-mode` (`inline` of `hero`), `data-chromite-end` (hero: tot waar de laag loopt), `data-chromite-tilt` (kanteling in graden, 90 = liggend), `data-chromite-land` (hero: selector van het vlak waarin de steen landt, bv. de beeldplek van de eerste slide; de steen volgt dat vlak daarna en wordt afgeknipt aan de slider), `data-chromite-clip`, `data-chromite-trigger` (selector van het scrollbereik, standaard de dichtstbijzijnde `<section>`), `data-chromite-turns` (standaard `1`), `data-chromite-material` (`stone` of `metal`).
 
+### Reis-modus (Home, vanaf v1.15.0)
+
+Geen markup in Webflow: de instellingen staan op de script-tag in de page-footer van Home.
+
+```html
+<script type="module" src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.15.0/dist/chromite.js"
+  data-chromite-start=".home-hero_visual"
+  data-chromite-land="[data-swiper-slide-index='0'] .mineral-slide_visual"
+  data-chromite-light=".home-hero_title.is-light, .mineral-slide_title.is-light"
+  data-chromite-size="0.95" data-chromite-tilt="35"></script>
+```
+
+De steen begint op de plek van de foto in het startvlak (die foto is de fallback en verdwijnt als het model er is). Desktop: hij blijft op die plek in beeld terwijl de hero wegscrolt en schuift kleiner naar de rechterrand; mobiel scrolt hij mee en wacht net buiten beeld rechts. Komt de landingssectie in beeld, dan vliegt hij naar het landingsvlak en volgt dat daarna, ook als de slider schuift (bij een slider met kopieën het exemplaar dat het dichtst bij het midden staat). Curve: merkcurve Position `0.75, 0, 0.5, 1`. Geen GSAP nodig.
+
+Lichte titels (`data-chromite-light`, in de hero en in de landingsslides): het script tekent ze zelf, letter voor letter op de plek van de DOM-letters (dus ook tijdens de inlaadanimatie en de slidewissel), en houdt ze alleen waar de steen is. De DOM-kopie wordt doorzichtig. Met "minder beweging": steen staat stil in de hero en scrolt mee, geen landing.
+
 ## Card hover (Card Primary)
 
 Hover van de kaarten: vierkantje schaalt in vanuit linksboven, titel schuift mee, tekst schuift open (Certificate, CTA), foto zoomt (CTA). Erin 450 ms, eruit 250 ms; een onderbroken hover keert terug vanaf de huidige stand. Gebruikt de GSAP (+ CustomEase) die Webflow laadt; laadt zelf niets. Alleen met muis en vanaf 768 px; op mobiel doet Webflow Interactions de CTA (uitschuiven bij scrollen).

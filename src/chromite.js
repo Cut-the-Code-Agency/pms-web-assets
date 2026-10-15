@@ -24,11 +24,15 @@
 //                                   de slider. Afbeeldingen in het landingsvlak worden verborgen.
 //   data-chromite-clip=".slider_element"  hero + land: waaraan de steen wordt afgeknipt
 //                                   (standaard de dichtstbijzijnde .swiper rond het landingsvlak)
+//
+// Reis-modus (home): geen [data-chromite]-markup, maar data-chromite-start (en -land, -light, -size, -tilt)
+// op de script-tag zelf. Zie chromite-travel.js.
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { mountTravel } from './chromite-travel.js';
 
 const MODEL_URL = new URL('../model/chromite.glb', import.meta.url).href;
 const GSAP_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/';
@@ -269,8 +273,23 @@ async function mount(wrap) {
   wrap.classList.add('is-ready');
 }
 
+// Reis-modus (zie chromite-travel.js): ingesteld met data-chromite-start op de script-tag
+const travelScript = document.querySelector('script[src*="/chromite.js"][data-chromite-start]');
+
+async function loadModel() {
+  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(MODEL_URL);
+  return gltf.scene;
+}
+
 function init() {
   if (!hasWebGL()) return; // fallback-afbeelding blijft staan
+  if (travelScript) {
+    const d = travelScript.dataset;
+    mountTravel({
+      start: d.chromiteStart, land: d.chromiteLand, light: d.chromiteLight, size: d.chromiteSize,
+      tilt: d.chromiteTilt, turns: d.chromiteTurns, material: d.chromiteMaterial,
+    }, loadModel).catch(err => console.error('[chromite]', err));
+  }
   document.querySelectorAll('[data-chromite]').forEach(wrap => {
     mount(wrap).catch(err => console.error('[chromite]', err));
   });
