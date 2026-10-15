@@ -6,8 +6,14 @@
 //     button[data-filter="all"]       "View all"
 //     button[data-filter="<slug>"]    één per industrie (CMS Industries, slug)
 //   [data-filter-list]                de lijst met kaarten (CMS Minerals)
-//     [data-filter-item]              één item per mineraal
-//       [data-industry="<slug>"]      verborgen, één per gekoppelde industrie (geneste lijst)
+//     [data-filter-item="<slug>"]     één item per mineraal (slug van het mineraal)
+//   [data-minerals-industries]        verborgen gegevenslijst buiten de kaartenlijst (CMS Minerals)
+//     [data-mineral="<slug>"]         één per mineraal
+//       [data-industry="<slug>"]      één per gekoppelde industrie (geneste lijst, multi-reference)
+//
+// De industrieën staan in een aparte lijst omdat een component met een geneste CMS-lijst
+// in Webflow niet kan; de kaartenlijst is een component (Minerals Grid List).
+// Oude opbouw (data-industry binnen het item) werkt ook nog.
 //
 // Knoppen zonder mineralen: disabled + class is-disabled (niet klikbaar).
 // Actieve knop: class is-active + aria-pressed. Lijst krijgt is-filtered zolang er een
@@ -21,9 +27,14 @@ function init() {
 
   const buttons = [...bar.querySelectorAll('[data-filter]')];
   const items = [...list.querySelectorAll('[data-filter-item]')];
+  const slugsIn = (el) => [...el.querySelectorAll('[data-industry]')].map((tag) => tag.getAttribute('data-industry'));
+  const byMineral = new Map();
+  document.querySelectorAll('[data-minerals-industries] [data-mineral]').forEach((el) => {
+    byMineral.set(el.getAttribute('data-mineral'), slugsIn(el));
+  });
   const tags = new Map(items.map((item) => [
     item,
-    new Set([...item.querySelectorAll('[data-industry]')].map((el) => el.getAttribute('data-industry'))),
+    new Set([...(byMineral.get(item.getAttribute('data-filter-item')) || []), ...slugsIn(item)]),
   ]));
 
   // Industrieën zonder mineralen uitschakelen.
