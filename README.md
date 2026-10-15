@@ -120,7 +120,7 @@ De blauwe lijn van de tijdlijn. Desktop (≥ 992 px, Lumos Slider variant Timeli
 In Webflow site-breed (footer):
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.16.0/dist/timeline.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.16.1/dist/timeline.js"></script>
 ```
 
 Markup (component Timeline Item): `data-timeline="root"` op de sectie, `item` op elke stap, `point` op jaartal en vierkantje, `card` op het kaartje, `fill` op het blauwe lijnstuk.

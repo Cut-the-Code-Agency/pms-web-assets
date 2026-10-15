@@ -98,11 +98,19 @@
       if (!swiper) return;
       if (DESKTOP.matches) {
         if (!swiper.enabled) swiper.enable();
-        const last = swiper.slides[swiper.slides.length - 1];
-        const after = last ? Math.max(0, swiper.width - last.offsetWidth) : 0;
+        // Naar beneden afronden (−1 px): anders telt Swiper bij gebroken breedtes een extra stap (en streepje).
+        const lastSize = swiper.slidesSizesGrid[swiper.slidesSizesGrid.length - 1] || 0;
+        const after = Math.max(0, Math.floor(swiper.width - lastSize) - 1);
         if (swiper.params.slidesOffsetAfter !== after) {
           swiper.params.slidesOffsetAfter = after;
           swiper.update();
+          // Past alles al in beeld, dan telt Swiper de lege rest mee: corrigeer tot de laatste slide links staat.
+          const lastPos = swiper.slidesGrid[swiper.slidesGrid.length - 1] || 0;
+          const fix = Math.floor(lastPos) - 1 + swiper.maxTranslate();
+          if (Math.abs(fix) > 1) {
+            swiper.params.slidesOffsetAfter = Math.max(0, after + fix);
+            swiper.update();
+          }
           if (swiper.pagination && swiper.pagination.el) {
             swiper.pagination.render();
             swiper.pagination.update();
