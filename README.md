@@ -112,3 +112,15 @@ Daarna committen, een nieuwe tag zetten (`v1.0.1`, …) en het versienummer in W
 
 Het model (`model/chromite.glb`) is gemaakt uit de aangeleverde GLTF met
 `gltf-transform optimize --compress meshopt --texture-compress webp --texture-size 1024`.
+
+## Timeline (About us "Timeline", Mineral # "Supply Chain")
+
+De blauwe lijn van de tijdlijn. Desktop (≥ 992 px, Lumos Slider variant Timeline): bij het inscrollen kleurt het eerste stuk lijn mee met de scroll naar de tweede stap; elke klik op de pijlen laat het stuk naar de volgende stap in 750 ms intekenen (`cubic-bezier(0.75,0,0.5,1)`). Bereikte stappen krijgen `is-reached` op het jaartal/vierkantje en het kaartje (blauw / donker). Swiper krijgt ruimte achter de laatste slide, zodat elke stap links kan staan. Mobiel: Swiper uit, stappen onder elkaar, de lijn vult mee met scrollen tot 60 % van het scherm. Reduced motion: geen tween. Gebruikt de GSAP (+ CustomEase) die Webflow laadt; laadt zelf niets. IIFE.
+
+In Webflow site-breed (footer):
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.16.0/dist/timeline.js"></script>
+```
+
+Markup (component Timeline Item): `data-timeline="root"` op de sectie, `item` op elke stap, `point` op jaartal en vierkantje, `card` op het kaartje, `fill` op het blauwe lijnstuk.
