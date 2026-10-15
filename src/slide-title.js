@@ -6,6 +6,7 @@
 //   [data-slide-split]   een titel in een Swiper-slide (Lumos Slider). Alle elementen met dit
 //                        attribuut in de nieuwe actieve slide splitsen in letters en bewegen samen,
 //                        zodat een blauwe titel en zijn lichte kopie gelijk blijven lopen.
+//   --slide-split: off   (CSS) op zo'n element: geen letteranimatie, bv. waar de titel al in beeld stond.
 //
 // Waarom een script: Webflow Interactions kennen geen "slide gewisseld"-trigger, en een interaction
 // op de class laat de stagger door de titels van alle slides heen lopen.
@@ -27,6 +28,8 @@
 
     const play = (slide) => {
       slide.querySelectorAll('[data-slide-split]').forEach((el) => {
+        // Uit te zetten per weergave met CSS: --slide-split: off (bv. Mineral Slide Card, waar de titel al zichtbaar is).
+        if (getComputedStyle(el).getPropertyValue('--slide-split').trim() === 'off') return;
         if (!el._pmsSplit) el._pmsSplit = new window.SplitText(el, { type: 'chars', mask: 'chars' });
         gsap.fromTo(el._pmsSplit.chars, { yPercent: 110 }, { yPercent: 0, duration: DURATION, ease, stagger: STAGGER, overwrite: true });
       });
