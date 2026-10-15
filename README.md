@@ -60,11 +60,19 @@ In Webflow site-breed (footer):
 
 Markup: `data-count-up` op het blok met het getal (bij Lumos `Block`: props Attribute Name/Value); de waarde is een extra wachttijd in seconden (`0` = meteen). Het eerste stuk tekst met cijfers in het blok telt op. Eerste toepassing: de vier cijfers in de Home Hero.
 
+## Mask image (lichte titel boven een CMS-steen)
+
+Een element met `data-mask-image` krijgt de foto uit het dichtstbijzijnde `[data-mask-source]` als CSS-mask. Zo is een lichte kopie van een titel alleen zichtbaar waar de (transparante) steenfoto is: wit op de steen, blauw ernaast (de blauwe titel staat eronder). Nodig omdat Webflow een CMS-foto niet aan `mask-image` kan koppelen. Werkt ook voor de kopieën die Swiper voor de lus maakt. De class van het element zet `mask-size`/`mask-repeat` en als beginwaarde een lege mask (zonder script onzichtbaar). Eerste toepassing: Mineral Slide (Featured Minerals op Home).
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.11.0/dist/mask-image.js"></script>
+```
+
 ## Wijzigen
 
 ```sh
 npm install
-npm run build        # src/*.js → dist/*.js (chromite, card-hover, link-preview, minerals-filter, count-up)
+npm run build        # src/*.js → dist/*.js (chromite, card-hover, link-preview, minerals-filter, count-up, mask-image)
 npx serve .          # test.html bekijken
 ```
 
