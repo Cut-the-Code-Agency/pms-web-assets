@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "esbuild src/chromite.js --bundle --format=esm --minify --target=es2020 --outfile=dist/chromite.js && esbuild src/card-hover.js --minify --target=es2020 --outfile=dist/card-hover.js && esbuild src/link-preview.js --minify --format=iife --target=es2020 --outfile=dist/link-preview.js && esbuild src/minerals-filter.js --minify --format=iife --target=es2020 --outfile=dist/minerals-filter.js && esbuild src/count-up.js --minify --format=iife --target=es2020 --outfile=dist/count-up.js && esbuild src/mask-image.js --minify --format=iife --target=es2020 --outfile=dist/mask-image.js && esbuild src/slide-title.js --minify --format=iife --target=es2020 --outfile=dist/slide-title.js"
+    "build": "esbuild src/chromite.js --bundle --format=esm --minify --target=es2020 --outfile=dist/chromite.js && esbuild src/card-hover.js --minify --target=es2020 --outfile=dist/card-hover.js && esbuild src/link-preview.js --minify --format=iife --target=es2020 --outfile=dist/link-preview.js && esbuild src/minerals-filter.js --minify --format=iife --target=es2020 --outfile=dist/minerals-filter.js && esbuild src/count-up.js --minify --format=iife --target=es2020 --outfile=dist/count-up.js && esbuild src/mask-image.js --minify --format=iife --target=es2020 --outfile=dist/mask-image.js && esbuild src/slide-title.js --minify --format=iife --target=es2020 --outfile=dist/slide-title.js && esbuild src/slide-fixed.js --minify --format=iife --target=es2020 --outfile=dist/slide-fixed.js"
   },
   "license": "ISC",
   "description": "",

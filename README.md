@@ -76,11 +76,19 @@ Elk element met `data-slide-split` in een Swiper-slide (Lumos Slider) splitst bi
 <script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.12.0/dist/slide-title.js"></script>
 ```
 
+## Slide fixed (hoekteksten die niet meeschuiven)
+
+Elk element met `data-slide-fixed` in een Swiper-slide (Lumos Slider) blijft tijdens het schuiven en slepen op de plek van de actieve slide staan, zodat een wissel alleen een fade en een kleine beweging omhoog is (die beweging staat in de CSS van de pagina). Alleen voor absoluut gepositioneerde elementen; in de gewone flow schuift het element mee. Werkt via de CSS-property `translate`, zodat `transform` vrij blijft voor de fade-beweging. Eerste toepassing: Mineral Slide (nummer en formule, en op desktop de tekst rechtsonder).
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.13.0/dist/slide-fixed.js"></script>
+```
+
 ## Wijzigen
 
 ```sh
 npm install
-npm run build        # src/*.js → dist/*.js (chromite, card-hover, link-preview, minerals-filter, count-up, mask-image, slide-title)
+npm run build        # src/*.js → dist/*.js (chromite, card-hover, link-preview, minerals-filter, count-up, mask-image, slide-title, slide-fixed)
 npx serve .          # test.html bekijken
 ```
 
