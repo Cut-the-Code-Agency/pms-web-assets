@@ -68,11 +68,19 @@ Een element met `data-mask-image` krijgt de foto uit het dichtstbijzijnde `[data
 <script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.11.0/dist/mask-image.js"></script>
 ```
 
+## Slide title (titel letter voor letter bij een slidewissel)
+
+Elk element met `data-slide-split` in een Swiper-slide (Lumos Slider) splitst bij het actief worden van die slide in letters die omhoog komen (750 ms, `0.75,0,0.5,1`, 25 ms tussen letters), zoals de titels die inladen. Alle `data-slide-split`-elementen in de slide bewegen samen, zodat een blauwe titel en zijn lichte kopie gelijk lopen. Gebruikt de GSAP + SplitText + CustomEase die Webflow laadt. Met `prefers-reduced-motion` gebeurt er niets. Eerste toepassing: Mineral Slide (titel, lichte kopie, mobiele naam).
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.12.0/dist/slide-title.js"></script>
+```
+
 ## Wijzigen
 
 ```sh
 npm install
-npm run build        # src/*.js → dist/*.js (chromite, card-hover, link-preview, minerals-filter, count-up, mask-image)
+npm run build        # src/*.js → dist/*.js (chromite, card-hover, link-preview, minerals-filter, count-up, mask-image, slide-title)
 npx serve .          # test.html bekijken
 ```
 
