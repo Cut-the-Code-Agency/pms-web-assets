@@ -7,9 +7,11 @@
 //                        gepositioneerd is (bv. de hoekteksten op desktop); in de gewone flow
 //                        (mobiel onder de foto) schuift het gewoon mee.
 //
-// Hoe: tijdens het schuiven en slepen zet het script per frame de CSS-property `translate`
-// (niet `transform`, die is van de fade-beweging) op het verschil tussen de slide en de plek
-// van de actieve slide. Geen GSAP nodig.
+// Hoe: Swiper verschuift de slides met een CSS-transition op de wrapper. Het script luistert naar
+// dezelfde Swiper-events (setTransition, setTranslate) en zet op hetzelfde moment de tegenbeweging
+// op de CSS-property `translate` (niet `transform`, die is van de fade-beweging): bij slepen direct,
+// bij een wissel als animatie met dezelfde duur en curve als de slider. Zo lopen ze gelijk zonder
+// per frame te meten. Geen GSAP nodig.
 
 (() => {
   const SEL = '[data-slide-fixed]';
@@ -17,37 +19,33 @@
   const hook = (swiper) => {
     if (swiper.__pmsFixed) return;
     swiper.__pmsFixed = true;
-    const root = swiper.el;
-    let raf = 0;
-    let moving = false;
-    let touching = false;
+    const easing = getComputedStyle(swiper.wrapperEl).transitionTimingFunction || 'ease';
+    let duration = 0;
 
-    const update = () => {
-      const anchor = root.getBoundingClientRect().left;
+    const apply = (translate) => {
+      const rootLeft = swiper.el.getBoundingClientRect().left;
+      const now = swiper.getTranslate();
       swiper.slides.forEach((slide) => {
         const els = slide.querySelectorAll(SEL);
         if (!els.length) return;
-        const dx = anchor - slide.getBoundingClientRect().left;
+        // Plek van de slide zonder de verschuiving van de wrapper.
+        const base = slide.getBoundingClientRect().left - rootLeft - now;
+        const to = `${-(base + translate)}px 0`;
         els.forEach((el) => {
-          el.style.translate = getComputedStyle(el).position === 'absolute' ? `${dx}px 0` : '';
+          const cs = getComputedStyle(el);
+          const from = cs.translate === 'none' ? '0px 0' : cs.translate; // ook midden in een animatie
+          el._pmsFixedAnim?.cancel();
+          if (cs.position !== 'absolute') { el.style.translate = ''; return; }
+          el.style.translate = to;
+          if (duration > 0) el._pmsFixedAnim = el.animate([{ translate: from }, { translate: to }], { duration, easing });
         });
       });
     };
-    const loop = () => {
-      update();
-      raf = moving || touching ? requestAnimationFrame(loop) : 0;
-    };
-    const start = () => { if (!raf) raf = requestAnimationFrame(loop); };
 
-    swiper.on('touchStart', () => { touching = true; start(); });
-    swiper.on('touchEnd', () => { touching = false; start(); });
-    swiper.on('sliderMove', start);
-    swiper.on('transitionStart', () => { moving = true; start(); });
-    swiper.on('transitionEnd', () => { moving = false; update(); });
-    swiper.on('slideChange', start);
-    swiper.on('resize', update);
-    window.addEventListener('resize', update);
-    update();
+    swiper.on('setTransition', (s, d) => { duration = d; });
+    swiper.on('setTranslate', (s, t) => apply(t));
+    window.addEventListener('resize', () => { duration = 0; apply(swiper.translate); });
+    apply(swiper.translate);
   };
 
   const init = () => {
