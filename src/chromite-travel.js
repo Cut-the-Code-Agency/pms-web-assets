@@ -278,6 +278,11 @@ export async function mountTravel(cfg, loadModel) {
     let pose = lerpPose(startPose, park, ease(progress.hero));
     if (now.target && progress.land > 0) pose = lerpPose(pose, rectPose(now.target.r), ease(progress.land));
 
+    // Geland in een vlak dat zelf doorzichtig is (Mineral Slide Card: niet-actieve kaart 0.7): steen even doorzichtig
+    const landOp = now.target ? parseFloat(getComputedStyle(now.target.el).opacity) : 1;
+    const canvasOp = String(+(1 - ease(progress.land) * (1 - landOp)).toFixed(3));
+    if (canvas.style.opacity !== canvasOp) canvas.style.opacity = canvasOp;
+
     // Schermpixels → scene (vlak z = 0)
     const halfH = Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * DIST;
     const upp = (2 * halfH) / vh;
