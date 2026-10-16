@@ -3,7 +3,7 @@
 //
 // Webflow-markup (component Timeline Item in de Lumos Slider, variant Timeline):
 //   [data-timeline="root"]    de sectie
-//   [data-timeline="item"]    één stap (slide)                   → class is-passed (stap vóór de actieve, desktop)
+//   [data-timeline="item"]    één stap (slide)                   → class is-passed (kaartje over de linkerrand, desktop)
 //   [data-timeline="point"]   jaartal / vierkantje op de lijn     → class is-reached
 //   [data-timeline="card"]    het kaartje                         → class is-reached
 //   [data-timeline="fill"]    het blauwe stuk lijn naar de volgende stap (transform)
@@ -13,8 +13,10 @@
 // Lijnstuk k vult clamp(p − k, 0, 1); stap k is bereikt bij p ≥ k. Swiper krijgt ruimte achter de
 // laatste slide, zodat elke stap links kan staan (en elk streepje een stap is). Die ruimte wordt opnieuw
 // berekend bij elke maatwijziging: lettertype geladen, slides of slider van maat, smal → breed.
-// Stappen vóór de actieve krijgen is-passed (Webflow fadet het kaartje uit), zodat er links niets
-// half afgesneden blijft staan.
+// is-passed (Webflow fadet het kaartje uit) hangt af van waar het kaartje nu staat, niet van de actieve
+// slide: zodra de linkerkant van het kaartje (met hoekje) over de linkerrand van de slider gaat (daar knipt
+// de clip-path van de Slider-variant), en pas weer weg als het er helemaal binnen staat. Elk frame tijdens
+// slepen en tijdens Swipers overgang, zodat er links niets half afgesneden op volle sterkte staat.
 // Mobiel: Swiper uit, stappen onder elkaar; de lijn vult mee met scrollen tot 60 % van het scherm.
 // prefers-reduced-motion: geen tween; desktop direct tot de volgende stap, mobiel alles bereikt.
 
@@ -41,12 +43,19 @@
     const swiperEl = items.length ? items[0].closest('.swiper') : null;
     if (!swiperEl) return;
 
-    const parts = items.map((item) => ({
-      item,
-      points: item.querySelectorAll('[data-timeline="point"]'),
-      card: item.querySelector('[data-timeline="card"]'),
-      fill: item.querySelector('[data-timeline="fill"]'),
-    }));
+    const parts = items.map((item) => {
+      const card = item.querySelector('[data-timeline="card"]');
+      // Wat uitfadet: het vak rond kaartje + hoekje (ouder van het kaartje); zijn linkerkant = de meest
+      // linkse van het vak en zijn kinderen.
+      const zone = card ? card.parentElement : null;
+      return {
+        item,
+        points: item.querySelectorAll('[data-timeline="point"]'),
+        card,
+        edges: zone ? [zone].concat(Array.from(zone.children)) : [item],
+        fill: item.querySelector('[data-timeline="fill"]'),
+      };
+    });
     // Inscrollen meten vanaf de lijn zelf (niet vanaf de bovenkant van de slider).
     const firstFill = parts.find((part) => part.fill);
     const lineEl = firstFill ? firstFill.fill.parentElement : swiperEl;
@@ -62,10 +71,48 @@
       if (part.card) part.card.classList.toggle('is-reached', reached);
     }
 
+    // Gepasseerd = linkerkant van het kaartje meer dan 1 px voorbij de linkerrand van de slider. Loopt er een
+    // overgang van Swiper (klik, streepje, loslaten na slepen), dan ook de kaartjes die aan het eind van die
+    // overgang voorbij de rand staan: die faden al tijdens het wegschuiven, zoals vóór deze versie bij een klik.
+    const leaving = parts.map(() => false);
+    let moving = false; // Swiper-overgang loopt (niet slepen)
+
+    function leftOf(part) {
+      let left = Infinity;
+      part.edges.forEach((el) => { left = Math.min(left, el.getBoundingClientRect().left); });
+      return left;
+    }
+
     function markPassed() {
       const on = !!swiper && swiper.enabled && DESKTOP.matches;
-      const active = on ? swiper.activeIndex : 0;
-      parts.forEach((part, k) => part.item.classList.toggle('is-passed', on && k < active));
+      const edge = on ? swiperEl.getBoundingClientRect().left - 1 : 0;
+      const passed = parts.map((part, k) => on && ((moving && leaving[k]) || leftOf(part) < edge));
+      parts.forEach((part, k) => part.item.classList.toggle('is-passed', passed[k]));
+    }
+
+    // Begin van een overgang: welke kaartjes staan straks (na de overgang) voorbij de rand?
+    function onTransitionStart() {
+      if (!moving || !swiper || !DESKTOP.matches) return;
+      const m = getComputedStyle(swiper.wrapperEl).transform;
+      const now = m && m !== 'none' ? new DOMMatrixReadOnly(m).m41 : 0;
+      const shift = swiper.translate - now; // nog af te leggen (negatief = naar links)
+      const edge = swiperEl.getBoundingClientRect().left - 1;
+      parts.forEach((part, k) => { leaving[k] = shift < -1 && leftOf(part) + shift < edge; });
+    }
+
+    // Tijdens slepen en Swipers overgang (CSS-transition op de wrapper) elk frame opnieuw bepalen.
+    let trackUntil = 0;
+    let tracking = false;
+    function trackFrame() {
+      markPassed();
+      if (performance.now() < trackUntil) requestAnimationFrame(trackFrame);
+      else tracking = false;
+    }
+    function track(ms) {
+      trackUntil = Math.max(trackUntil, performance.now() + ms);
+      if (tracking) return;
+      tracking = true;
+      requestAnimationFrame(trackFrame);
     }
 
     function renderDesktop() {
@@ -161,6 +208,12 @@
     function attach(sw) {
       swiper = sw;
       swiper.on('slideChange', onSlide);
+      swiper.on('setTransition', (sw, duration) => {
+        moving = (Number(duration) || 0) > 0;
+        track((Number(duration) || 0) + 80);
+      });
+      swiper.on('setTranslate', () => { onTransitionStart(); markPassed(); track(80); });
+      swiper.on('transitionEnd', () => { moving = false; markPassed(); });
       swiper.on('resize', queueFit); // Swipers eigen herberekening (gebruikt anders een oude ruimte)
       if (window.ResizeObserver) {
         // Slides worden breder als het lettertype binnen is; de slider bij smal → breed.
