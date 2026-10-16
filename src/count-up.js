@@ -12,6 +12,8 @@
 // infaden bepaalt zo het startmoment), één keer. Na 4 s telt het hoe dan ook.
 // Voor- en achtervoegsel blijven staan; het aantal decimalen en de scheidingstekens van de
 // Webflow-tekst worden aangehouden. Met prefers-reduced-motion blijft de eindwaarde staan.
+// Schermlezers horen meteen de eindwaarde: die staat in een visueel verborgen span in het blok, het
+// tellende getal is aria-hidden.
 // Waarom geen Webflow Interactions: die kunnen geen tekst of getal animeren.
 
 const DURATION = 1.6;
@@ -45,6 +47,18 @@ function write(item, text) {
   item.host.innerHTML = text.replace(/\D/g, (c) => `<span class="${item.marks}">${escapeHtml(c)}</span>`);
 }
 
+const SR_ONLY = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0';
+
+// Eindwaarde voor schermlezers; het zichtbare (tellende) getal wordt voor hen verborgen.
+function announceFinal(item) {
+  const sr = document.createElement('span');
+  sr.setAttribute('style', SR_ONLY);
+  sr.textContent = format(item.p.value, item.p);
+  // Tekst direct in het blok (geen <p>): write() overschrijft het blok, dus de span komt erna.
+  if (item.host === item.el) item.el.after(sr); else item.el.appendChild(sr);
+  item.host.setAttribute('aria-hidden', 'true');
+}
+
 function textNodeWithDigits(el) {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   let node;
@@ -66,6 +80,7 @@ function init() {
     const item = { el, node, host: node.parentElement, marks, p, delay: parseFloat(el.getAttribute('data-count-up')) || 0 };
     // Zonder GSAP of met reduced motion: alleen de eindwaarde (met marks) neerzetten.
     write(item, format(gsap && !reduce ? 0 : p.value, p));
+    announceFinal(item);
     items.push(item);
   });
   if (!items.length || !gsap || reduce) return;
