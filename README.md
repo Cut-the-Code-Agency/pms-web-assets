@@ -124,3 +124,11 @@ In Webflow site-breed (footer):
 ```
 
 Markup (component Timeline Item): `data-timeline="root"` op de sectie, `item` op elke stap, `point` op jaartal en vierkantje, `card` op het kaartje, `fill` op het blauwe lijnstuk.
+
+## Mineraalpagina (v1.26.0)
+
+In de page-footer van het Minerals-sjabloon (Mineral #), elk met SRI:
+
+- `product-gallery.js`: Product Hero-galerij. Foto's in een strook met scroll-snap (vegen werkt vanzelf), thumbnails `button[data-gallery-thumb="0|1"]` schuiven naar de foto en krijgen `is-active` + `aria-pressed`; `[data-gallery-meta]` krijgt `is-light` op een donkere foto. Minder beweging: springen zonder schuiven.
+- `product-tabs.js` (met `defer`, draait vóór het Lumos Tab-script): tab zonder tekst (knop + paneel) weg; datasheet-link zonder bestand weg; de zin "available upon request" (`[data-doc-request]`) alleen als er geen datasheet is.
+- `minerals-filter.js`: ook een keuzemenu `select[data-minerals-filter-select]`; zonder eigen gegevenslijst op de pagina haalt het de lijst en de industrienamen op van `data-minerals-source` (bv. `/minerals`).
