@@ -10,6 +10,9 @@
 //                                                                           ← lichte titels: alleen zichtbaar waar de steen is
 //     data-chromite-size="1.1"                                              ← lengte van de steen t.o.v. de breedte van het vlak
 //     data-chromite-tilt="35"></script>                                     ← kanteling in het beeld, graden
+//   Optioneel: data-chromite-land-y="0.062"  ← landingspunt zoveel × de hoogte van het landingsvlak lager dan
+//                                              het midden (standaard LAND_Y; de getekende steen valt anders
+//                                              ~6 % van de vlakhoogte boven het midden, op elke breedte)
 //
 // De lichte titels tekent het script zelf, letter voor letter op de plek van de DOM-letters (dus ook tijdens
 // de inlaadanimatie), en knipt ze af op de vorm van de steen. De DOM-kopie wordt doorzichtig.
@@ -22,6 +25,7 @@ const IDLE_SPEED = 0.35; // radialen per seconde
 const PARK_SCALE = 0.6; // grootte aan de rechterrand t.o.v. het startvlak
 const PARK_INSIDE = 0.65; // deel van de steen dat aan de rechterrand in beeld blijft
 const PARK_INSIDE_MOBILE = -0.3; // mobiel/tablet: net buiten beeld (de steen reikt ~0,6 × zijn lengte uit het midden)
+const LAND_Y = 0.062; // landingspunt omlaag, fractie van de hoogte van het landingsvlak (gemeten: steen anders ~6,2 % te hoog)
 const LAND_START = 0.7; // desktop: landing begint als de landingssectie op deze hoogte van het scherm staat
 const MOBILE_MAX = 991; // tot en met deze breedte: mobiele route (steen scrolt mee met de hero en wacht buiten beeld)
 const DAMP = 8; // naloop van de scroll (hoger = strakker)
@@ -131,6 +135,7 @@ export async function mountTravel(cfg, loadModel) {
   const tilt = THREE.MathUtils.degToRad(parseFloat(cfg.tilt || '0'));
   const turns = parseFloat(cfg.turns || '1');
   const landing = !reduceMotion && cfg.land ? cfg.land : null;
+  const landY = Number.isFinite(parseFloat(cfg.landY)) ? parseFloat(cfg.landY) : LAND_Y;
 
   // Laag over de hele pagina, onder de navigatie (z-index 1000); klikken gaan erdoorheen
   const stage = document.createElement('div');
@@ -326,6 +331,7 @@ export async function mountTravel(cfg, loadModel) {
     let pose = lerpPose(startPose, park, ease(progress.hero));
     if (now.target && progress.land > 0) {
       const to = rectPose(now.target.r);
+      to.cy += now.target.r.height * landY; // midden van de getekende steen op het midden van het vlak
       if (mobile) {
         // Mobiel: buiten beeld rechts op de hoogte van het landingsvlak gaan staan, dan van rechts erin.
         // Pas als hij helemaal buiten beeld is (anders zou je hem zien verspringen).
