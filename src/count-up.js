@@ -4,6 +4,9 @@
 // Webflow-markup:
 //   [data-count-up]          het blok met het getal; het eerste stuk tekst met cijfers telt op
 //   data-count-up="0.65"     wachttijd in seconden vóór het tellen begint (leeg = 0)
+//   data-count-up-marks="stat_mark"   (optioneel) elk teken dat geen cijfer is (scheidingstekens,
+//                            voor- en achtervoegsel) komt in een <span> met deze class, ook tijdens
+//                            het tellen en bij reduced motion. Zo kan Webflow ze apart opmaken.
 //
 // Begint als het blok in beeld komt én zichtbaar is (een Webflow-interaction die het blok laat
 // infaden bepaalt zo het startmoment), één keer. Na 4 s telt het hoe dan ook.
@@ -34,6 +37,14 @@ function format(n, p) {
   return p.prefix + int + (frac ? p.decimalMark + frac : '') + p.suffix;
 }
 
+const escapeHtml = (c) => c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Schrijft de tekst; met marks als HTML in de ouder van de tekstnode (een Webflow <p>/<div>).
+function write(item, text) {
+  if (!item.marks) { item.node.nodeValue = text; return; }
+  item.host.innerHTML = text.replace(/\D/g, (c) => `<span class="${item.marks}">${escapeHtml(c)}</span>`);
+}
+
 function textNodeWithDigits(el) {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   let node;
@@ -43,14 +54,7 @@ function textNodeWithDigits(el) {
 
 function init() {
   const gsap = window.gsap;
-  if (!gsap) return;
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-  let ease = 'power3.out';
-  if (window.CustomEase) {
-    gsap.registerPlugin(window.CustomEase);
-    ease = window.CustomEase.create('pmsCount', '0.25,0,0.25,1');
-  }
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const items = [];
   document.querySelectorAll('[data-count-up]').forEach((el) => {
@@ -58,20 +62,34 @@ function init() {
     if (!node) return;
     const p = parse(node.nodeValue.trim());
     if (!p) return;
-    node.nodeValue = format(0, p);
-    items.push({ el, node, p, delay: parseFloat(el.getAttribute('data-count-up')) || 0 });
+    const marks = (el.getAttribute('data-count-up-marks') || '').trim();
+    const item = { el, node, host: node.parentElement, marks, p, delay: parseFloat(el.getAttribute('data-count-up')) || 0 };
+    // Zonder GSAP of met reduced motion: alleen de eindwaarde (met marks) neerzetten.
+    write(item, format(gsap && !reduce ? 0 : p.value, p));
+    items.push(item);
   });
-  if (!items.length) return;
+  if (!items.length || !gsap || reduce) return;
+
+  let ease = 'power3.out';
+  if (window.CustomEase) {
+    gsap.registerPlugin(window.CustomEase);
+    ease = window.CustomEase.create('pmsCount', '0.25,0,0.25,1');
+  }
 
   const run = (item) => {
+    // Breedte van de eindwaarde vasthouden, zodat een label ernaast niet meeschuift tijdens het tellen
+    // (gemeten bij de start: dan staat het webfont er).
+    write(item, format(item.p.value, item.p));
+    item.host.style.minWidth = `${item.host.getBoundingClientRect().width}px`;
+    write(item, format(0, item.p));
     const state = { n: 0 };
     gsap.to(state, {
       n: item.p.value,
       duration: DURATION,
       delay: item.delay,
       ease,
-      onUpdate: () => { item.node.nodeValue = format(state.n, item.p); },
-      onComplete: () => { item.node.nodeValue = format(item.p.value, item.p); },
+      onUpdate: () => { write(item, format(state.n, item.p)); },
+      onComplete: () => { write(item, format(item.p.value, item.p)); item.host.style.minWidth = ''; },
     });
   };
 
