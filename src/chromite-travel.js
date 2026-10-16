@@ -21,7 +21,9 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 const IDLE_SPEED = 0.35; // radialen per seconde
 const PARK_SCALE = 0.6; // grootte aan de rechterrand t.o.v. het startvlak
 const PARK_INSIDE = 0.65; // deel van de steen dat aan de rechterrand in beeld blijft
-const PARK_INSIDE_MOBILE = -0.1; // mobiel: net buiten beeld
+const PARK_INSIDE_MOBILE = -0.3; // mobiel/tablet: net buiten beeld (de steen reikt ~0,6 × zijn lengte uit het midden)
+const LAND_START = 0.7; // desktop: landing begint als de landingssectie op deze hoogte van het scherm staat
+const MOBILE_MAX = 991; // tot en met deze breedte: mobiele route (steen scrolt mee met de hero en wacht buiten beeld)
 const DAMP = 8; // naloop van de scroll (hoger = strakker)
 const FOV = 30;
 const DIST = 6;
@@ -243,8 +245,44 @@ export async function mountTravel(cfg, loadModel) {
     return best;
   }
 
+  // Gelijk met een slidewissel: Swiper schuift de slides met een CSS-transition die de browser buiten de
+  // pagina-code om afspeelt (compositor), een paar frames vóór wat het script per frame meet. Daarom krijgt
+  // de laag dezelfde beweging als animatie (zelfde moment, duur en curve, net als slide-fixed.js), en tekent
+  // het script de steen en de lichte titels stil op de begin- of eindplek van de wissel (welke het meest in
+  // beeld is, zodat niets buiten het canvas valt). Slepen gaat zonder transition en wordt per frame gevolgd.
+  let slideAnim = null;
+  let lastCx = 0; // midden van de steen in het vorige frame
+  const hooked = new WeakSet();
+  const stageShift = () => {
+    if (!slideAnim) return 0;
+    const v = parseFloat(getComputedStyle(stage).translate);
+    return Number.isFinite(v) ? v : 0;
+  };
+  function hookSwipers() {
+    for (const t of targets) {
+      const sw = t.closest('.swiper')?.swiper;
+      if (!sw || hooked.has(sw)) continue;
+      hooked.add(sw);
+      let duration = 0;
+      sw.on('setTransition', (s, d) => { duration = d; });
+      sw.on('setTranslate', (s, translate) => {
+        slideAnim?.cancel();
+        slideAnim = null;
+        if (!(duration > 0)) return;
+        const m = new DOMMatrixReadOnly(getComputedStyle(s.wrapperEl).transform); // stand bij de start
+        const delta = (s.isHorizontal() ? translate - m.m41 : 0);
+        if (!delta) return;
+        const easing = getComputedStyle(s.wrapperEl).transitionTimingFunction || 'ease';
+        const startX = lastCx, mid = vw / 2;
+        const from = Math.abs(startX + delta - mid) < Math.abs(startX - mid) ? -delta : 0;
+        slideAnim = stage.animate([{ translate: `${from}px 0` }, { translate: `${from + delta}px 0` }], { duration, easing, fill: 'forwards' });
+      });
+    }
+  }
+
   const progress = { hero: 0, land: 0 };
   let first = true;
+  const isMobile = () => vw <= MOBILE_MAX;
   function targetsNow() {
     const hr = heroSection.getBoundingClientRect();
     const hero = reduceMotion ? 0 : clamp01(-hr.top / hr.height);
@@ -252,31 +290,50 @@ export async function mountTravel(cfg, loadModel) {
     if (landing) {
       target = currentTarget();
       if (target) {
+        // Landing loopt tot het landingsvlak midden in beeld staat. Begin: desktop als de bovenkant van de
+        // landingssectie op 70% van de schermhoogte staat (ongeveer halverwege de sectie ervoor, zodat de steen
+        // ook op hoge schermen even rechts wacht; later zou hij stil op de kop van de sectie liggen); mobiel
+        // zodra de sectie onder in beeld komt. Nooit voordat de hero helemaal weg is.
         const sec = (target.el.closest('section') || target.el).getBoundingClientRect();
         const cy = target.r.top + target.r.height / 2;
-        land = clamp01((vh - sec.top) / (vh / 2 + cy - sec.top));
+        const gap = Math.max(0, sec.top - hr.bottom); // afstand hero-onderkant → landingssectie
+        const from = Math.min(isMobile() ? vh : vh * LAND_START, gap);
+        land = clamp01((from - sec.top) / Math.max(1, from - vh / 2 + cy - sec.top));
       }
     }
     return { hero, land, target, hr };
   }
 
+  let shift = 0; // verschuiving van de laag (slidewissel): alles zoveel naar links/rechts tekenen
   function updatePose(dt) {
     const now = targetsNow();
     const k = first ? 1 : 1 - Math.exp(-dt * DAMP);
     first = false;
-    progress.hero += (now.hero - progress.hero) * k;
-    progress.land += (now.land - progress.land) * k;
+    for (const key of ['hero', 'land']) {
+      progress[key] += (now[key] - progress[key]) * k;
+      if (Math.abs(now[key] - progress[key]) < 1e-4) progress[key] = now[key];
+    }
 
-    // Start: het startvlak. Desktop: vastgezet op zijn plek in beeld zolang de hero scrolt. Mobiel (en bij
-    // minder beweging) scrolt hij mee, en wacht hij net buiten beeld rechts, zodat hij geen tekst bedekt.
-    const mobile = vw < 768;
+    // Start: het startvlak. Desktop: vastgezet op zijn plek in beeld zolang de hero scrolt, daarna kleiner
+    // aan de rechterrand, midden in beeld. Mobiel en tablet (en bij minder beweging): scrolt mee met de hero;
+    // alleen x gaat naar rechts, tot net buiten beeld, zodat hij geen tekst bedekt.
+    const mobile = isMobile();
     const sr = start.getBoundingClientRect();
     const startPose = rectPose(sr);
     if (!reduceMotion && !mobile) startPose.cy -= now.hr.top;
-    const park = { size: startPose.size * PARK_SCALE, cy: vh / 2, cx: 0 };
+    const park = { size: startPose.size * PARK_SCALE, cy: mobile ? startPose.cy : vh / 2, cx: 0 };
     park.cx = vw + park.size * (0.5 - (mobile ? PARK_INSIDE_MOBILE : PARK_INSIDE));
     let pose = lerpPose(startPose, park, ease(progress.hero));
-    if (now.target && progress.land > 0) pose = lerpPose(pose, rectPose(now.target.r), ease(progress.land));
+    if (now.target && progress.land > 0) {
+      const to = rectPose(now.target.r);
+      if (mobile) {
+        // Mobiel: buiten beeld rechts op de hoogte van het landingsvlak gaan staan, dan van rechts erin.
+        // Pas als hij helemaal buiten beeld is (anders zou je hem zien verspringen).
+        const out = clamp01((pose.cx - pose.size * 0.6 - vw) / (pose.size * 0.2));
+        pose = { ...pose, cy: lerp(pose.cy, to.cy, out) };
+      }
+      pose = lerpPose(pose, to, ease(progress.land));
+    }
 
     // Geland in een vlak dat zelf doorzichtig is (Mineral Slide Card: niet-actieve kaart 0.7): steen even doorzichtig
     const landOp = now.target ? parseFloat(getComputedStyle(now.target.el).opacity) : 1;
@@ -286,7 +343,7 @@ export async function mountTravel(cfg, loadModel) {
     // Schermpixels → scene (vlak z = 0)
     const halfH = Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * DIST;
     const upp = (2 * halfH) / vh;
-    mover.position.set((pose.cx - vw / 2) * upp, (vh / 2 - pose.cy) * upp, 0);
+    mover.position.set((pose.cx - shift - vw / 2) * upp, (vh / 2 - pose.cy) * upp, 0);
     mover.scale.setScalar((pose.size * upp) / MODEL_SIZE);
 
     if (!reduceMotion) {
@@ -307,7 +364,7 @@ export async function mountTravel(cfg, loadModel) {
       return r.right > sb.l && r.left < sb.r && r.bottom > sb.t && r.top < sb.b;
     });
     if (!hits.length) return;
-    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    octx.setTransform(dpr, 0, 0, dpr, -shift * dpr, 0);
     octx.textBaseline = 'alphabetic';
     painter.begin();
     for (const l of hits) {
@@ -330,10 +387,16 @@ export async function mountTravel(cfg, loadModel) {
     const dt = Math.min(clock.getDelta(), 0.1);
     if (document.hidden || !vw) return;
     if (!reduceMotion) spinner.rotation.y += dt * IDLE_SPEED;
+    // Slidewissel voorbij: laag terug op zijn plek, in hetzelfde frame als de tekening zonder verschuiving
+    if (slideAnim && slideAnim.playState === 'finished') { slideAnim.cancel(); slideAnim = null; }
+    hookSwipers();
+    shift = stageShift();
     const pose = updatePose(dt);
+    lastCx = pose.cx;
     // Buiten beeld: niet tekenen
     const half = pose.size * 0.6;
-    const onScreen = pose.cy + half > 0 && pose.cy - half < vh && pose.cx + half > 0 && pose.cx - half < vw;
+    const cx = pose.cx - shift;
+    const onScreen = pose.cy + half > 0 && pose.cy - half < vh && cx + half > 0 && cx - half < vw;
     if (!onScreen) {
       if (drawn) { renderer.clear(); octx.clearRect(0, 0, overlay.width, overlay.height); drawn = false; }
       return;
@@ -353,6 +416,5 @@ export async function mountTravel(cfg, loadModel) {
       fallback.style.transition = 'opacity .6s';
       fallback.style.opacity = '0';
     }
-    start.classList.add('is-chromite-ready');
   });
 }
