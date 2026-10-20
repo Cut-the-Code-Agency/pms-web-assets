@@ -8,7 +8,9 @@
 //   2. Europe: het vizier pakt Nederland, schuift dan naar Duitsland en Spanje en terug, zolang de
 //      dia zichtbaar is; de coördinaten rechtsonder lopen mee, de tijd linksonder tikt.
 //   World: de vierkantjes lichten om de beurt op (vierkantje groeit, ring dijt uit en vervaagt).
-//   3. Flare: de rasterlijnen lichten op rond de muis (alleen bij een muis), zoals Network Map.
+//   3. Flare: de rasterlijnen lichten wit op rond de muis; de lichtvlek loopt met vertraging achter de
+//      muis aan (alleen bij een muis).
+//   Altijd (ook bij minder beweging): randteksten blijven aan de rand van het scherm (data-pin).
 // Waarom een script en geen IX3: de onderdelen zitten in een SVG (alleen zo blijft het raster op elke
 // schermmaat precies op de foto, net als object-fit: cover), IX3 kent geen lus "zolang in beeld" en
 // geen lichtvlek die de muis volgt. Laadt niets zelf; Web Animations API.
@@ -24,8 +26,9 @@
   const EASE = 'cubic-bezier(0.75, 0, 0.5, 1)';
   const EASE_OUT = 'cubic-bezier(0.25, 1, 0.5, 1)';
   const NS = 'http://www.w3.org/2000/svg';
-  const FLARE_RADIUS = '13rem';
-  const FLARE_COLOR = 'rgba(240, 242, 244, 0.6)';
+  const FLARE_RADIUS = '15rem';
+  const FLARE_COLOR = 'rgba(255, 255, 255, 0.95)';
+  const FLARE_FOLLOW = 0.06; // deel van de afstand tot de muis per frame: de lichtvlek loopt zichtbaar achter de muis aan
   const HOLD_MS = 2600;   // Europe: zo lang blijft het vizier op een land staan
   const MOVE_MS = 1300;   // Europe: verschuiven naar het volgende land
   const STEP_MS = 1100;   // World: tijd tussen twee stippen
@@ -210,7 +213,7 @@
     };
   }
 
-  // Flare: tweede SVG met dezelfde lijnen, licht, gemaskeerd rond de muis.
+  // Flare: tweede SVG met dezelfde lijnen, wit, gemaskeerd rond de muis.
   function flare(svg, slide) {
     const layer = document.createElementNS(NS, 'svg');
     for (const a of ['viewBox', 'preserveAspectRatio']) layer.setAttribute(a, svg.getAttribute(a));
@@ -224,26 +227,66 @@
       l.setAttribute('vector-effect', 'non-scaling-stroke');
     });
     layer.appendChild(g);
-    Object.assign(layer.style, { opacity: '0', transition: 'opacity 300ms cubic-bezier(0.5, 0, 0.5, 1)' });
+    Object.assign(layer.style, { opacity: '0', transition: 'opacity 400ms cubic-bezier(0.5, 0, 0.5, 1)' });
     svg.after(layer);
-    let raf = 0, mx = 0, my = 0, inside = false, ready = false;
+    // De lichtvlek volgt de muis met vertraging (zachte inhaal per frame), zodat hij opvalt.
+    let raf = 0, mx = 0, my = 0, cx = 0, cy = 0, inside = false, ready = false, placed = false;
     function paint() {
       raf = 0;
       const r = layer.getBoundingClientRect();
-      const x = mx - r.left, y = my - r.top;
-      if (!ready || !inside || x < 0 || y < 0 || x > r.width || y > r.height) { layer.style.opacity = '0'; return; }
-      const mask = `radial-gradient(circle ${FLARE_RADIUS} at ${x}px ${y}px, #000 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%)`;
+      const tx = mx - r.left, ty = my - r.top;
+      const over = inside && tx >= 0 && ty >= 0 && tx <= r.width && ty <= r.height;
+      if (!ready || !over) { layer.style.opacity = '0'; placed = false; return; }
+      if (!placed) { cx = tx; cy = ty; placed = true; }
+      cx += (tx - cx) * FLARE_FOLLOW; cy += (ty - cy) * FLARE_FOLLOW;
+      const mask = `radial-gradient(circle ${FLARE_RADIUS} at ${cx}px ${cy}px, #000 0%, rgba(0, 0, 0, 0.5) 35%, transparent 100%)`;
       layer.style.maskImage = mask;
       layer.style.webkitMaskImage = mask;
       layer.style.opacity = '1';
+      if (Math.abs(tx - cx) > 0.5 || Math.abs(ty - cy) > 0.5) raf = requestAnimationFrame(paint);
     }
     slide.addEventListener('pointermove', (e) => {
       if (e.pointerType && e.pointerType !== 'mouse') return;
       inside = true; mx = e.clientX; my = e.clientY;
       if (!raf) raf = requestAnimationFrame(paint);
     });
-    slide.addEventListener('pointerleave', () => { inside = false; layer.style.opacity = '0'; });
+    slide.addEventListener('pointerleave', () => { inside = false; placed = false; layer.style.opacity = '0'; });
     return { ready() { ready = true; } };
+  }
+
+  // Randteksten (letters boven, cijfers links, tijd en coördinaten in de hoeken) horen bij de rand van
+  // het scherm, niet bij de foto: door de uitsnede (slice) valt anders een deel buiten beeld.
+  // data-pin: t = boven, l = links, bl / br = hoek linksonder / rechtsonder. Verschuift via het
+  // SVG-attribuut transform (de animaties gebruiken alleen opacity op deze elementen).
+  function pin(svg) {
+    const [, , vw, vh] = svg.getAttribute('viewBox').split(/[ ,]+/).map(Number);
+    const els = [...svg.querySelectorAll('[data-pin]')];
+    function layout() {
+      const r = svg.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const s = Math.max(r.width / vw, r.height / vh);
+      const x0 = (vw - r.width / s) / 2, y0 = (vh - r.height / s) / 2; // weggesneden deel per kant
+      els.forEach((el) => {
+        const p = el.dataset.pin;
+        const dx = p === 'l' || p === 'bl' ? x0 : p === 'br' ? -x0 : 0;
+        const dy = p === 't' ? y0 : p === 'bl' || p === 'br' ? -y0 : 0;
+        el.setAttribute('transform', `translate(${dx.toFixed(1)} ${dy.toFixed(1)})`);
+      });
+      // Letters/cijfers van een kolom of rij die (bijna) buiten beeld valt: weg, niet half tegen de rand.
+      const edge = 18;
+      els.forEach((el) => {
+        if (el.dataset.pin !== 't' && el.dataset.pin !== 'l') return;
+        el.removeAttribute('visibility');
+        const b = el.getBoundingClientRect();
+        const out = el.dataset.pin === 't'
+          ? b.left < r.left + edge || b.right > r.right - edge // letters: kolom aan de zijkant weg
+          : b.top < r.top + edge || b.bottom > r.bottom - edge; // cijfers: rij boven of onder weg
+        if (out) el.setAttribute('visibility', 'hidden');
+      });
+    }
+    layout();
+    if ('ResizeObserver' in window) new ResizeObserver(layout).observe(svg);
+    else window.addEventListener('resize', layout);
   }
 
   function setup(svg) {
@@ -270,8 +313,10 @@
   }
 
   function init() {
+    const maps = document.querySelectorAll('svg[data-story-map]');
+    maps.forEach(pin); // ook bij minder beweging: dit is opmaak, geen animatie
     if (reduce.matches || !('animate' in Element.prototype)) return;
-    document.querySelectorAll('svg[data-story-map]').forEach(setup);
+    maps.forEach(setup);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
