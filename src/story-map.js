@@ -1,0 +1,279 @@
+// Story Map: de bewegende kaarten in de Story Slides (About us, dia "Europe" en dia "World").
+// De kaart zelf is de foto van de dia (zonder raster); daarboven staat per kaart een inline SVG
+// (Webflow-component Story Map Europe / Story Map World, HtmlEmbed) met raster, coördinaten,
+// vierkantjes en (Europe) een vizier. Die SVG staat in rust al in de eindstand, dus zonder script
+// of met "minder beweging" ziet de kaart eruit zoals in Figma. Dit script:
+//   1. Opbouw zodra de dia in beeld schuift: lijnen tekenen (verticaal van boven, horizontaal van
+//      links, na elkaar), coördinaten en teksten faden in, vierkantjes groeien in.
+//   2. Europe: het vizier pakt Nederland, schuift dan naar Duitsland en Spanje en terug, zolang de
+//      dia zichtbaar is; de coördinaten rechtsonder lopen mee, de tijd linksonder tikt.
+//   World: de vierkantjes lichten om de beurt op (vierkantje groeit, ring dijt uit en vervaagt).
+//   3. Flare: de rasterlijnen lichten op rond de muis (alleen bij een muis), zoals Network Map.
+// Waarom een script en geen IX3: de onderdelen zitten in een SVG (alleen zo blijft het raster op elke
+// schermmaat precies op de foto, net als object-fit: cover), IX3 kent geen lus "zolang in beeld" en
+// geen lichtvlek die de muis volgt. Laadt niets zelf; Web Animations API.
+//
+// Markup: svg.story-map_svg[data-story-map="europe"|"world"] ergens in een .story-slide_wrap.
+//   .sm-v / .sm-h        rasterlijnen          .sm-label   letters en cijfers
+//   .sm-square           vierkantje            .sm-frame   kader (Europe: van het vizier; World: per stip)
+//   .sm-target           vizier (Europe), transform translate(x, y) in kaartpixels
+//   [data-sm-dot]        locatie; Europe met data-lat / data-lon voor de uitlezing
+//   .sm-time / .sm-coord teksten onder (Europe)
+
+(() => {
+  const EASE = 'cubic-bezier(0.75, 0, 0.5, 1)';
+  const EASE_OUT = 'cubic-bezier(0.25, 1, 0.5, 1)';
+  const NS = 'http://www.w3.org/2000/svg';
+  const FLARE_RADIUS = '13rem';
+  const FLARE_COLOR = 'rgba(240, 242, 244, 0.6)';
+  const HOLD_MS = 2600;   // Europe: zo lang blijft het vizier op een land staan
+  const MOVE_MS = 1300;   // Europe: verschuiven naar het volgende land
+  const STEP_MS = 1100;   // World: tijd tussen twee stippen
+
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+
+  // Animatie die zijn eindstand vasthoudt als inline stijl (zodat een volgende animatie daar verder gaat).
+  function play(el, frames, opts) {
+    const a = el.animate(frames, { fill: 'both', ...opts });
+    a.finished.then(() => {
+      const last = frames[frames.length - 1];
+      for (const k in last) if (k !== 'offset' && k !== 'easing') el.style[k] = last[k];
+      a.cancel();
+    }).catch(() => {});
+    return a;
+  }
+  const wait = (ms) => new Promise((r) => window.setTimeout(r, ms));
+
+  function dms(v, pos, neg) {
+    const a = Math.abs(v);
+    let d = Math.floor(a), m = Math.round((a - d) * 60);
+    if (m === 60) { d += 1; m = 0; }
+    return `${d}°${String(m).padStart(2, '0')}′ ${v >= 0 ? pos : neg}`;
+  }
+  const readout = (lat, lon) => `${dms(lat, 'N', 'S')}, ${dms(lon, 'E', 'W')}`;
+
+  // Is de dia echt te zien (niet bedekt door de volgende sticky dia, niet buiten beeld)?
+  function shown(slide) {
+    const r = slide.getBoundingClientRect();
+    if (r.bottom <= 0 || r.top >= window.innerHeight) return false;
+    const next = slide.nextElementSibling;
+    return !(next && next.getBoundingClientRect().top <= 0);
+  }
+
+  // Ligt een kaartpunt binnen het zichtbare deel van de SVG? (Op een staand scherm valt een deel van de
+  // kaart weg door de uitsnede; daar slaat het vizier die landen over.)
+  function inView(svg, x, y) {
+    const m = svg.getScreenCTM(), r = svg.getBoundingClientRect();
+    if (!m) return true;
+    const sx = m.a * x + m.c * y + m.e, sy = m.b * x + m.d * y + m.f;
+    const mx = r.width * 0.06, my = r.height * 0.06;
+    return sx >= r.left + mx && sx <= r.right - mx && sy >= r.top + my && sy <= r.bottom - my;
+  }
+
+  function hideAll(svg) {
+    svg.querySelectorAll('.sm-v').forEach((l) => (l.style.transform = 'scaleY(0)'));
+    svg.querySelectorAll('.sm-h').forEach((l) => (l.style.transform = 'scaleX(0)'));
+    svg.querySelectorAll('text, .sm-meta-group').forEach((t) => (t.style.opacity = '0'));
+    svg.querySelectorAll('.sm-square, .sm-dot .sm-frame').forEach((q) => (q.style.transform = 'scale(0)'));
+    svg.querySelectorAll('.sm-cross-v').forEach((l) => (l.style.transform = 'scaleY(0)'));
+    svg.querySelectorAll('.sm-cross-h').forEach((l) => (l.style.transform = 'scaleX(0)'));
+    svg.querySelectorAll('.sm-target .sm-frame').forEach((f) => (f.style.transform = 'scale(0)'));
+  }
+
+  // Opbouw; resolves als het raster staat (dan mag de lus en de flare beginnen).
+  async function build(svg) {
+    const kind = svg.dataset.storyMap;
+    const v = [...svg.querySelectorAll('.sm-v')], h = [...svg.querySelectorAll('.sm-h')];
+    v.forEach((l, i) => play(l, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: 750, delay: i * 40, easing: EASE }));
+    h.forEach((l, i) => play(l, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 750, delay: 120 + i * 40, easing: EASE }));
+    svg.querySelectorAll('.sm-label').forEach((t, i) =>
+      play(t, [{ opacity: '0' }, { opacity: '1' }], { duration: 400, delay: 350 + i * 15, easing: 'linear' }));
+    svg.querySelectorAll('.sm-meta, .sm-meta-group').forEach((t) =>
+      play(t, [{ opacity: '0' }, { opacity: '1' }], { duration: 500, delay: 600, easing: 'linear' }));
+    const squares = [...svg.querySelectorAll('.sm-square')];
+    squares.forEach((q, i) => {
+      const end = q.closest('.sm-dot') || !q.dataset.smDot || q.dataset.smDot !== 'nl' ? 'scale(1)' : 'scale(0.79)';
+      play(q, [{ transform: 'scale(0)' }, { transform: end }], { duration: 600, delay: 500 + i * 90, easing: EASE });
+    });
+    svg.querySelectorAll('.sm-dot .sm-frame').forEach((f, i) =>
+      play(f, [{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 600, delay: 600 + i * 90, easing: EASE }));
+    if (kind === 'europe') {
+      const cv = svg.querySelector('.sm-cross-v'), ch = svg.querySelector('.sm-cross-h'), fr = svg.querySelector('.sm-target .sm-frame');
+      play(cv, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: 900, delay: 900, easing: EASE });
+      play(ch, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 900, delay: 900, easing: EASE });
+      play(fr, [{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 450, delay: 1350, easing: EASE });
+    }
+    await wait(1100 + Math.max(v.length, h.length) * 40);
+  }
+
+  // Europe: vizier van land naar land.
+  function europeLoop(svg, slide) {
+    const target = svg.querySelector('.sm-target');
+    const frame = target.querySelector('.sm-frame');
+    const coord = svg.querySelector('.sm-coord');
+    const time = svg.querySelector('.sm-time');
+    const dots = [...svg.querySelectorAll('[data-sm-dot]')].map((q) => ({
+      el: q, lat: +q.dataset.lat, lon: +q.dataset.lon,
+      x: +q.getAttribute('x') + +q.getAttribute('width') / 2, y: +q.getAttribute('y') + +q.getAttribute('height') / 2,
+    }));
+    let at = 0, running = false, busy = false, timer = 0;
+
+    // Klok linksonder: tikt per seconde zolang de kaart te zien is.
+    let clock = 0;
+    const base = time ? time.textContent : '';
+    const m = base.match(/T(\d\d):(\d\d):(\d\d)/);
+    let secs = m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : 0;
+    function tickClock() {
+      secs = (secs + 1) % 86400;
+      const p = (n) => String(n).padStart(2, '0');
+      time.textContent = base.replace(/T\d\d:\d\d:\d\d/, `T${p(Math.floor(secs / 3600))}:${p(Math.floor(secs / 60) % 60)}:${p(secs % 60)}`);
+    }
+
+    async function next() {
+      if (!running || busy) return;
+      if (!shown(slide)) { timer = window.setTimeout(next, 500); return; }
+      let n = 1;
+      while (n < dots.length && !inView(svg, dots[(at + n) % dots.length].x, dots[(at + n) % dots.length].y)) n += 1;
+      if (n >= dots.length) { timer = window.setTimeout(next, HOLD_MS); return; }
+      busy = true;
+      const from = dots[at], to = dots[(at + n) % dots.length];
+      at = (at + n) % dots.length;
+      play(frame, [{ transform: 'scale(1)' }, { transform: 'scale(0)' }], { duration: 250, easing: EASE });
+      play(from.el, [{ transform: 'scale(0.79)' }, { transform: 'scale(1)' }], { duration: 250, easing: EASE });
+      const move = play(target, [
+        { transform: `translate(${from.x}px, ${from.y}px)` },
+        { transform: `translate(${to.x}px, ${to.y}px)` },
+      ], { duration: MOVE_MS, delay: 150, easing: EASE });
+      // Uitlezing loopt mee met het vizier.
+      const t0 = performance.now() + 150;
+      const ease = (t) => { // benadering van de merkcurve voor de getallen
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      };
+      let raf = 0;
+      const step = (now) => {
+        const t = Math.min(1, Math.max(0, (now - t0) / MOVE_MS)), e = ease(t);
+        if (coord) coord.textContent = readout(from.lat + (to.lat - from.lat) * e, from.lon + (to.lon - from.lon) * e);
+        if (t < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+      await move.finished.catch(() => {});
+      cancelAnimationFrame(raf);
+      if (coord) coord.textContent = readout(to.lat, to.lon);
+      play(frame, [{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 450, easing: EASE });
+      play(to.el, [{ transform: 'scale(1)' }, { transform: 'scale(0.79)' }], { duration: 450, easing: EASE });
+      busy = false;
+      if (running) timer = window.setTimeout(next, HOLD_MS);
+    }
+    return {
+      start() {
+        if (running) return; running = true;
+        timer = window.setTimeout(next, HOLD_MS);
+        if (time) clock = window.setInterval(() => shown(slide) && tickClock(), 1000);
+      },
+      stop() { running = false; window.clearTimeout(timer); window.clearInterval(clock); },
+    };
+  }
+
+  // World: stippen om de beurt.
+  function worldLoop(svg, slide) {
+    const dots = [...svg.querySelectorAll('.sm-dot')];
+    let i = 0, running = false, timer = 0;
+    function pulse() {
+      if (!running) return;
+      const sqOf = (d) => d.querySelector('.sm-square');
+      let n = 0;
+      while (n < dots.length) {
+        const q = sqOf(dots[(i + n) % dots.length]);
+        if (inView(svg, +q.getAttribute('x') + 4, +q.getAttribute('y') + 4)) break;
+        n += 1;
+      }
+      if (shown(slide) && n < dots.length) {
+        const dot = dots[(i + n) % dots.length];
+        i += n + 1;
+        const sq = dot.querySelector('.sm-square'), fr = dot.querySelector('.sm-frame');
+        const ring = fr.cloneNode();
+        ring.removeAttribute('style');
+        dot.insertBefore(ring, fr);
+        ring.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(3.2)', opacity: 0 }],
+          { duration: 1600, easing: EASE_OUT }).finished.then(() => ring.remove(), () => ring.remove());
+        sq.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.9)', offset: 0.4 }, { transform: 'scale(1)' }],
+          { duration: 1100, easing: EASE });
+        fr.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.25)', offset: 0.4 }, { transform: 'scale(1)' }],
+          { duration: 1100, easing: EASE });
+      }
+      timer = window.setTimeout(pulse, STEP_MS);
+    }
+    return {
+      start() { if (running) return; running = true; timer = window.setTimeout(pulse, 400); },
+      stop() { running = false; window.clearTimeout(timer); },
+    };
+  }
+
+  // Flare: tweede SVG met dezelfde lijnen, licht, gemaskeerd rond de muis.
+  function flare(svg, slide) {
+    const layer = document.createElementNS(NS, 'svg');
+    for (const a of ['viewBox', 'preserveAspectRatio']) layer.setAttribute(a, svg.getAttribute(a));
+    layer.setAttribute('class', 'story-map_svg');
+    layer.setAttribute('aria-hidden', 'true');
+    layer.setAttribute('focusable', 'false');
+    const g = svg.querySelector('.sm-grid').cloneNode(true);
+    g.querySelectorAll('line').forEach((l) => {
+      l.removeAttribute('class'); l.removeAttribute('style');
+      l.setAttribute('stroke', FLARE_COLOR); l.setAttribute('stroke-width', '1');
+      l.setAttribute('vector-effect', 'non-scaling-stroke');
+    });
+    layer.appendChild(g);
+    Object.assign(layer.style, { opacity: '0', transition: 'opacity 300ms cubic-bezier(0.5, 0, 0.5, 1)' });
+    svg.after(layer);
+    let raf = 0, mx = 0, my = 0, inside = false, ready = false;
+    function paint() {
+      raf = 0;
+      const r = layer.getBoundingClientRect();
+      const x = mx - r.left, y = my - r.top;
+      if (!ready || !inside || x < 0 || y < 0 || x > r.width || y > r.height) { layer.style.opacity = '0'; return; }
+      const mask = `radial-gradient(circle ${FLARE_RADIUS} at ${x}px ${y}px, #000 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%)`;
+      layer.style.maskImage = mask;
+      layer.style.webkitMaskImage = mask;
+      layer.style.opacity = '1';
+    }
+    slide.addEventListener('pointermove', (e) => {
+      if (e.pointerType && e.pointerType !== 'mouse') return;
+      inside = true; mx = e.clientX; my = e.clientY;
+      if (!raf) raf = requestAnimationFrame(paint);
+    });
+    slide.addEventListener('pointerleave', () => { inside = false; layer.style.opacity = '0'; });
+    return { ready() { ready = true; } };
+  }
+
+  function setup(svg) {
+    if (svg.dataset.storyMapReady) return;
+    svg.dataset.storyMapReady = 'true';
+    const slide = svg.closest('.story-slide_wrap') || svg.parentElement;
+    hideAll(svg);
+    const loop = svg.dataset.storyMap === 'europe' ? europeLoop(svg, slide) : worldLoop(svg, slide);
+    const fl = finePointer.matches ? flare(svg, slide) : null;
+    let built = false, visible = false;
+    const sync = () => (built && visible && !document.hidden ? loop.start() : loop.stop());
+    // Opbouw zodra de bovenkant van de dia 65 % van het scherm passeert.
+    const io = new IntersectionObserver(async (entries) => {
+      if (!entries[0].isIntersecting) return;
+      io.disconnect();
+      await build(svg);
+      built = true;
+      if (fl) fl.ready();
+      sync();
+    }, { rootMargin: '0px 0px -35% 0px' });
+    io.observe(slide);
+    new IntersectionObserver((entries) => { visible = entries[0].isIntersecting; sync(); }, { threshold: 0.15 }).observe(slide);
+    document.addEventListener('visibilitychange', sync);
+  }
+
+  function init() {
+    if (reduce.matches || !('animate' in Element.prototype)) return;
+    document.querySelectorAll('svg[data-story-map]').forEach(setup);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();

@@ -132,3 +132,13 @@ In de page-footer van het Minerals-sjabloon (Mineral #), elk met SRI:
 - `product-gallery.js`: Product Hero-galerij. Foto's in een strook met scroll-snap (vegen werkt vanzelf), thumbnails `button[data-gallery-thumb="0|1"]` schuiven naar de foto en krijgen `is-active` + `aria-pressed`; `[data-gallery-meta]` krijgt `is-light` op een donkere foto. Minder beweging: springen zonder schuiven.
 - `product-tabs.js` (met `defer`, draait vóór het Lumos Tab-script): tab zonder tekst (knop + paneel) weg; datasheet-link zonder bestand weg; de zin "available upon request" (`[data-doc-request]`) alleen als er geen datasheet is.
 - `minerals-filter.js`: ook een keuzemenu `select[data-minerals-filter-select]`; zonder eigen gegevenslijst op de pagina haalt het de lijst en de industrienamen op van `data-minerals-source` (bv. `/minerals`).
+
+## Story Map (About us, Story Slides)
+
+Bewegende kaarten in twee dia's van de Story Slides. De kaart is de foto van de dia (zonder raster); de Webflow-componenten **Story Map Europe** en **Story Map World** (in de slot Visual van Story Slide) bevatten een inline SVG met raster, coördinaten, vierkantjes en (Europe) een vizier, in rust al in de eindstand. Het script bouwt die op zodra de dia in beeld schuift (lijnen tekenen, labels faden, vierkantjes groeien), laat daarna het vizier van Nederland naar Duitsland en Spanje lopen (coördinaten lopen mee, de tijd tikt) of de stippen om de beurt oplichten (World), en tekent een flare over de rasterlijnen rond de muis. Kaartpunten buiten de uitsnede (staand scherm) worden overgeslagen. Reduced motion: niets. Geen GSAP nodig.
+
+In Webflow, page-footer van About us:
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.28.0/dist/story-map.js" integrity="…" crossorigin="anonymous" defer></script>
+```
