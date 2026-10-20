@@ -10,6 +10,8 @@
 //                                                                           ← lichte titels: alleen zichtbaar waar de steen is
 //     data-chromite-size="1.1"                                              ← lengte van de steen t.o.v. de breedte van het vlak
 //     data-chromite-tilt="35"></script>                                     ← kanteling in het beeld, graden
+//   Optioneel: data-chromite-above=".slider_arrow_prev, .slider_arrow_next"  ← elementen die boven de steen blijven:
+//                                              hun vlak wordt uit de laag geknipt (de laag ligt boven de pagina)
 //   Optioneel: data-chromite-land-y="0.062"  ← landingspunt zoveel × de hoogte van het landingsvlak lager dan
 //                                              het midden (standaard LAND_Y; de getekende steen valt anders
 //                                              ~6 % van de vlakhoogte boven het midden, op elke breedte)
@@ -309,6 +311,24 @@ export async function mountTravel(cfg, loadModel) {
     return { hero, land, target, hr };
   }
 
+  // Elementen die boven de steen moeten blijven (bv. pijlknoppen op de slider): de laag ligt boven de hele
+  // pagina, dus hun vlak wordt uit de laag geknipt (clip-path met gaten, evenodd), in de coördinaten van de
+  // laag (die bij een slidewissel verschuift).
+  const aboveEls = cfg.above ? [...document.querySelectorAll(cfg.above)] : [];
+  let lastClip = '';
+  function clipAbove() {
+    if (!aboveEls.length) return;
+    let d = '';
+    for (const el of aboveEls) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || r.bottom < 0 || r.top > vh || r.right - shift < 0 || r.left - shift > vw) continue;
+      const l = Math.round(r.left - shift), t = Math.round(r.top);
+      d += ` M${l} ${t}h${Math.round(r.width)}v${Math.round(r.height)}h${-Math.round(r.width)}z`;
+    }
+    const clip = d ? `path(evenodd, "M${-vw} ${-vh}h${vw * 3}v${vh * 3}h${-vw * 3}z${d}")` : '';
+    if (clip !== lastClip) { stage.style.clipPath = clip; lastClip = clip; }
+  }
+
   let shift = 0; // verschuiving van de laag (slidewissel): alles zoveel naar links/rechts tekenen
   function updatePose(dt) {
     const now = targetsNow();
@@ -408,6 +428,7 @@ export async function mountTravel(cfg, loadModel) {
       return;
     }
     drawn = true;
+    clipAbove();
     renderer.render(scene, camera);
     paintLights(pose);
   });

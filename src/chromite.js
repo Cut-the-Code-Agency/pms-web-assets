@@ -288,6 +288,7 @@ function init() {
     mountTravel({
       start: d.chromiteStart, land: d.chromiteLand, light: d.chromiteLight, size: d.chromiteSize,
       tilt: d.chromiteTilt, turns: d.chromiteTurns, material: d.chromiteMaterial, landY: d.chromiteLandY,
+      above: d.chromiteAbove,
     }, loadModel).catch(err => console.error('[chromite]', err));
   }
   document.querySelectorAll('[data-chromite]').forEach(wrap => {
