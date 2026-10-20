@@ -8,6 +8,7 @@
 //   2. Europe: het vizier pakt Nederland, schuift dan naar Duitsland en Spanje en terug, zolang de
 //      dia zichtbaar is; de coördinaten rechtsonder lopen mee, de tijd linksonder tikt.
 //   World: de vierkantjes lichten om de beurt op (vierkantje groeit, ring dijt uit en vervaagt).
+//   Beide: de tijd linksonder tikt per seconde.
 //   3. Flare: de rasterlijnen lichten wit op rond de muis; de lichtvlek loopt met vertraging achter de
 //      muis aan (alleen bij een muis).
 //   Altijd (ook bij minder beweging): randteksten blijven aan de rand van het scherm (data-pin).
@@ -16,11 +17,11 @@
 // geen lichtvlek die de muis volgt. Laadt niets zelf; Web Animations API.
 //
 // Markup: svg.story-map_svg[data-story-map="europe"|"world"] ergens in een .story-slide_wrap.
-//   .sm-v / .sm-h        rasterlijnen          .sm-label   letters en cijfers
+//   .sm-v / .sm-h        rasterlijnen          .sm-label   letters/cijfers (optioneel, nu niet gebruikt)
 //   .sm-square           vierkantje            .sm-frame   kader (Europe: van het vizier; World: per stip)
 //   .sm-target           vizier (Europe), transform translate(x, y) in kaartpixels
 //   [data-sm-dot]        locatie; Europe met data-lat / data-lon voor de uitlezing
-//   .sm-time / .sm-coord teksten onder (Europe)
+//   .sm-time / .sm-coord teksten in de hoeken onder (tijd tikt; Europe: coördinaten volgen het vizier)
 
 (() => {
   const EASE = 'cubic-bezier(0.75, 0, 0.5, 1)';
@@ -110,28 +111,36 @@
     await wait(1100 + Math.max(v.length, h.length) * 40);
   }
 
+  // Klok linksonder (beide kaarten): tikt per seconde zolang de kaart te zien is.
+  function clock(svg, slide) {
+    const time = svg.querySelector('.sm-time');
+    let timer = 0;
+    if (!time) return { start() {}, stop() {} };
+    const base = time.textContent;
+    const m = base.match(/T(\d\d):(\d\d):(\d\d)/);
+    let secs = m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : 0;
+    const p = (n) => String(n).padStart(2, '0');
+    function tick() {
+      if (!shown(slide)) return;
+      secs = (secs + 1) % 86400;
+      time.textContent = base.replace(/T\d\d:\d\d:\d\d/, `T${p(Math.floor(secs / 3600))}:${p(Math.floor(secs / 60) % 60)}:${p(secs % 60)}`);
+    }
+    return {
+      start() { if (!timer) timer = window.setInterval(tick, 1000); },
+      stop() { window.clearInterval(timer); timer = 0; },
+    };
+  }
+
   // Europe: vizier van land naar land.
   function europeLoop(svg, slide) {
     const target = svg.querySelector('.sm-target');
     const frame = target.querySelector('.sm-frame');
     const coord = svg.querySelector('.sm-coord');
-    const time = svg.querySelector('.sm-time');
     const dots = [...svg.querySelectorAll('[data-sm-dot]')].map((q) => ({
       el: q, lat: +q.dataset.lat, lon: +q.dataset.lon,
       x: +q.getAttribute('x') + +q.getAttribute('width') / 2, y: +q.getAttribute('y') + +q.getAttribute('height') / 2,
     }));
     let at = 0, running = false, busy = false, timer = 0;
-
-    // Klok linksonder: tikt per seconde zolang de kaart te zien is.
-    let clock = 0;
-    const base = time ? time.textContent : '';
-    const m = base.match(/T(\d\d):(\d\d):(\d\d)/);
-    let secs = m ? +m[1] * 3600 + +m[2] * 60 + +m[3] : 0;
-    function tickClock() {
-      secs = (secs + 1) % 86400;
-      const p = (n) => String(n).padStart(2, '0');
-      time.textContent = base.replace(/T\d\d:\d\d:\d\d/, `T${p(Math.floor(secs / 3600))}:${p(Math.floor(secs / 60) % 60)}:${p(secs % 60)}`);
-    }
 
     async function next() {
       if (!running || busy) return;
@@ -172,9 +181,8 @@
       start() {
         if (running) return; running = true;
         timer = window.setTimeout(next, HOLD_MS);
-        if (time) clock = window.setInterval(() => shown(slide) && tickClock(), 1000);
       },
-      stop() { running = false; window.clearTimeout(timer); window.clearInterval(clock); },
+      stop() { running = false; window.clearTimeout(timer); },
     };
   }
 
@@ -294,7 +302,9 @@
     svg.dataset.storyMapReady = 'true';
     const slide = svg.closest('.story-slide_wrap') || svg.parentElement;
     hideAll(svg);
-    const loop = svg.dataset.storyMap === 'europe' ? europeLoop(svg, slide) : worldLoop(svg, slide);
+    const motion = svg.dataset.storyMap === 'europe' ? europeLoop(svg, slide) : worldLoop(svg, slide);
+    const ticker = clock(svg, slide);
+    const loop = { start() { motion.start(); ticker.start(); }, stop() { motion.stop(); ticker.stop(); } };
     const fl = finePointer.matches ? flare(svg, slide) : null;
     let built = false, visible = false;
     const sync = () => (built && visible && !document.hidden ? loop.start() : loop.stop());

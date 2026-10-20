@@ -136,10 +136,10 @@ In de page-footer van het Minerals-sjabloon (Mineral #), elk met SRI:
 
 ## Story Map (About us, Story Slides)
 
-Bewegende kaarten in twee dia's van de Story Slides. De kaart is de foto van de dia (zonder raster); de Webflow-componenten **Story Map Europe** en **Story Map World** (in de slot Visual van Story Slide) bevatten een inline SVG met raster, coördinaten, vierkantjes en (Europe) een vizier, in rust al in de eindstand. Het script bouwt die op zodra de dia in beeld schuift (lijnen tekenen, labels faden, vierkantjes groeien), laat daarna het vizier van Nederland naar Duitsland en Spanje lopen (coördinaten lopen mee, de tijd tikt) of de stippen om de beurt oplichten (World), en tekent een witte flare over de rasterlijnen die met vertraging achter de muis aan loopt. Letters, cijfers, tijd en coördinaten blijven aan de rand van het scherm (`data-pin`), ook bij minder beweging. Kaartpunten buiten de uitsnede (staand scherm) worden overgeslagen. Reduced motion: niets. Geen GSAP nodig.
+Bewegende kaarten in twee dia's van de Story Slides. De kaart is de foto van de dia (zonder raster); de Webflow-componenten **Story Map Europe** en **Story Map World** (in de slot Visual van Story Slide) bevatten een inline SVG met raster, coördinaten, vierkantjes en (Europe) een vizier, in rust al in de eindstand. Het script bouwt die op zodra de dia in beeld schuift (lijnen tekenen, labels faden, vierkantjes groeien), laat daarna het vizier van Nederland naar Duitsland en Spanje lopen (coördinaten lopen mee, de tijd tikt) of de stippen om de beurt oplichten (World), en tekent een witte flare over de rasterlijnen die met vertraging achter de muis aan loopt. Tijd (tikt, beide kaarten) en coördinaten blijven in de hoeken van het scherm (`data-pin`), ook bij minder beweging. Kaartpunten buiten de uitsnede (staand scherm) worden overgeslagen. Reduced motion: niets. Geen GSAP nodig.
 
 In Webflow, page-footer van About us:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.29.0/dist/story-map.js" integrity="…" crossorigin="anonymous" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.32.0/dist/story-map.js" integrity="…" crossorigin="anonymous" defer></script>
 ```
