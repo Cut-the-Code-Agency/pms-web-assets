@@ -26,6 +26,10 @@
       return;
     }
     let current = -1;
+    // Beginpunt van een dia in de strook. De dia's zijn op hele pixels afgerond (Webflow-stijl
+    // round(up, 100%, 1px)); i * clientWidth kon een halve pixel te kort zijn en liet dan een
+    // streepje van de vorige dia zien.
+    const offset = (i) => slides[i].offsetLeft - slides[0].offsetLeft;
 
     const set = (i) => {
       if (i === current) return;
@@ -54,14 +58,14 @@
       t.addEventListener('click', () => {
         const i = Number(t.getAttribute('data-gallery-thumb')) || 0;
         set(i);
-        track.scrollTo({ left: i * track.clientWidth, behavior: reduce.matches ? 'auto' : 'smooth' });
+        track.scrollTo({ left: offset(i), behavior: reduce.matches ? 'auto' : 'smooth' });
       });
     });
 
     // Bij een andere breedte op dezelfde foto blijven staan.
     if ('ResizeObserver' in window) {
       new ResizeObserver(() => {
-        if (current >= 0) track.scrollLeft = current * track.clientWidth;
+        if (current >= 0) track.scrollLeft = offset(current);
       }).observe(track);
     }
 
