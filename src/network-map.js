@@ -1,8 +1,9 @@
 // Network Map: wat Webflow Interactions (IX3) niet kunnen bij de netwerkkaart (Our service).
 // De opbouw bij in beeld komen (lijnen groeien, coördinaten, vierkantjes) is IX3; dit script doet:
-//   1. Oplichten: zolang de kaart in beeld is lichten de vierkantjes om de beurt op (groeien in en
-//      weer uit, met een zachte gloed), een paar tegelijk, in willekeurige volgorde.
-//   2. Flare: de rasterlijnen lichten op rond de muis (zachte lichtvlek die meebeweegt over de lijnen).
+//   1. Oplichten: zolang de kaart in beeld is lichten de vierkantjes om de beurt op (groeien vanuit
+//      hun midden in en weer uit, zonder gloed), een paar tegelijk, in willekeurige volgorde.
+//   2. Flare: de rasterlijnen lichten wit op rond de muis; de lichtvlek loopt met vertraging achter de
+//      muis aan (zoals Story Map op About us).
 // Het groeien van een vierkantje bij hover is een stijl-overgang (Lumos-trigger op .network-map_dot).
 //
 // Webflow-markup (component Network Map):
@@ -16,8 +17,9 @@
 // (Web Animations API voor het oplichten, CSS-mask voor de flare).
 
 const PULSE_MS = 1500;
-const FLARE_RADIUS = '13rem';
-const LINE_COLOR = 'rgba(240, 242, 244, 0.6)';
+const FLARE_RADIUS = '15rem';
+const LINE_COLOR = 'rgba(255, 255, 255, 0.95)';
+const FLARE_FOLLOW = 0.06; // deel van de afstand tot de muis per frame: de lichtvlek loopt zichtbaar achter de muis aan
 
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
@@ -44,9 +46,9 @@ function setupPulse(frame) {
     busy.add(sq);
     const anim = sq.animate(
       [
-        { scale: '1', boxShadow: '0 0 0 0 rgba(240, 242, 244, 0)' },
-        { scale: '1.9', boxShadow: '0 0 0.75rem 0.125rem rgba(240, 242, 244, 0.45)', offset: 0.45 },
-        { scale: '1', boxShadow: '0 0 0 0 rgba(240, 242, 244, 0)' },
+        { scale: '1' },
+        { scale: '1.9', offset: 0.45 },
+        { scale: '1' },
       ],
       { duration: PULSE_MS * (0.85 + Math.random() * 0.3), easing: 'cubic-bezier(0.5, 0, 0.5, 1)' }
     );
@@ -75,7 +77,7 @@ function setupFlare(frame) {
   svg.setAttribute('focusable', 'false');
   Object.assign(svg.style, {
     position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none',
-    opacity: '0', transition: 'opacity 300ms cubic-bezier(0.5, 0, 0.5, 1)', zIndex: '1',
+    opacity: '0', transition: 'opacity 400ms cubic-bezier(0.5, 0, 0.5, 1)', zIndex: '1',
   });
   visual.appendChild(svg);
 
@@ -109,25 +111,29 @@ function setupFlare(frame) {
   if ('ResizeObserver' in window) new ResizeObserver(draw).observe(visual);
 
   const firstLine = visual.querySelector('.network-map_line-v');
-  let raf = 0, mx = 0, my = 0, inside = false;
+  // De lichtvlek volgt de muis met vertraging (zachte inhaal per frame), zodat hij opvalt.
+  let raf = 0, mx = 0, my = 0, cx = 0, cy = 0, inside = false, placed = false;
   function paint() {
     raf = 0;
     const r = visual.getBoundingClientRect();
-    const x = mx - r.left, y = my - r.top;
-    const over = inside && x >= 0 && y >= 0 && x <= r.width && y <= r.height;
+    const tx = mx - r.left, ty = my - r.top;
+    const over = inside && tx >= 0 && ty >= 0 && tx <= r.width && ty <= r.height;
     // Pas na de opbouw (lijnen gegroeid) en alleen boven de kaart.
-    if (!over || !grown(firstLine)) { svg.style.opacity = '0'; return; }
-    const mask = `radial-gradient(circle ${FLARE_RADIUS} at ${x}px ${y}px, #000 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%)`;
+    if (!over || !grown(firstLine)) { svg.style.opacity = '0'; placed = false; return; }
+    if (!placed) { cx = tx; cy = ty; placed = true; }
+    cx += (tx - cx) * FLARE_FOLLOW; cy += (ty - cy) * FLARE_FOLLOW;
+    const mask = `radial-gradient(circle ${FLARE_RADIUS} at ${cx}px ${cy}px, #000 0%, rgba(0, 0, 0, 0.5) 35%, transparent 100%)`;
     svg.style.maskImage = mask;
     svg.style.webkitMaskImage = mask;
     svg.style.opacity = '1';
+    if (Math.abs(tx - cx) > 0.5 || Math.abs(ty - cy) > 0.5) raf = requestAnimationFrame(paint);
   }
   frame.addEventListener('pointermove', (e) => {
     if (e.pointerType && e.pointerType !== 'mouse') return;
     inside = true; mx = e.clientX; my = e.clientY;
     if (!raf) raf = requestAnimationFrame(paint);
   });
-  frame.addEventListener('pointerleave', () => { inside = false; svg.style.opacity = '0'; });
+  frame.addEventListener('pointerleave', () => { inside = false; placed = false; svg.style.opacity = '0'; });
 }
 
 function init() {
