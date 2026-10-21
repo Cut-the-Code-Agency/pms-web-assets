@@ -9,7 +9,7 @@
   const SCROLL_KEY = 'pms-vt-grid-scroll';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const supported = 'onpagereveal' in window && 'CSSViewTransitionRule' in window;
-  const P = (window.pmsVT = { version: '1.39.0' });
+  const P = (window.pmsVT = { version: '1.41.0' });
 
   // Adressen met en zonder taalvoorvoegsel (/minerals/x, /nl/minerals/x, /de/minerals/x), op elk domein
   const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/minerals(?:\/([a-z0-9-]+))?\/?$/;
@@ -40,10 +40,14 @@
 .vt-clone { position: fixed; z-index: 2; pointer-events: none; object-fit: fill; margin: 0; max-width: none; }
 html.vt-leaving :is(.minerals-grid_head, .minerals-grid_item:not(.is-vt-active), .page_main > :not(:first-child), .footer_wrap) {
   opacity: 0 !important; translate: 0 .5rem; transition: opacity 250ms var(--vt-exit), translate 250ms var(--vt-exit) !important; }
-::view-transition-group(*) { animation-duration: var(--vt-dur); animation-timing-function: var(--vt-ease); }
+::view-transition-group(*) { animation-duration: var(--vt-dur); animation-timing-function: var(--vt-ease); transform-origin: 0 0; }
 ::view-transition-old(root) { animation: vt-out 250ms var(--vt-exit) both; z-index: 1; }
 ::view-transition-new(root) { animation: none; }
-::view-transition-group(vt-frame) { border: var(--border-width--main, 1px) solid var(--vt-border); z-index: 2; }
+::view-transition-group(vt-frame) { z-index: 2; }
+.vt-edge { position: fixed; z-index: 2; pointer-events: none; background: var(--vt-border); --bw: var(--border-width--main, 1px); }
+::view-transition-group(vt-edge-t), ::view-transition-group(vt-edge-r), ::view-transition-group(vt-edge-b), ::view-transition-group(vt-edge-l) { z-index: 2; }
+::view-transition-old(vt-edge-t), ::view-transition-old(vt-edge-r), ::view-transition-old(vt-edge-b), ::view-transition-old(vt-edge-l),
+::view-transition-new(vt-edge-t), ::view-transition-new(vt-edge-r), ::view-transition-new(vt-edge-b), ::view-transition-new(vt-edge-l) { animation: none; }
 ::view-transition-old(vt-frame) { height: 100%; object-fit: fill; animation: vt-out 200ms var(--vt-exit) both; }
 ::view-transition-new(vt-frame) { display: none; }
 ::view-transition-group(vt-stone) { z-index: 4; }
@@ -143,11 +147,60 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     if (img.complete && img.naturalWidth) show(); else img.addEventListener('load', show, { once: true });
   }
 
+  // Rand van het kader als vier lijnen (een rand op de groep zou meeschalen): elke lijn schaalt alleen in zijn lengte
+  let edges = [];
+  function makeEdges(frame) {
+    removeEdges();
+    const r = frame.getBoundingClientRect(), L = r.left + 'px', T = r.top + 'px', W = r.width + 'px', H = r.height + 'px';
+    const sides = {
+      t: { left: L, top: T, width: W, height: 'var(--bw)' },
+      b: { left: L, top: `calc(${T} + ${H} - var(--bw))`, width: W, height: 'var(--bw)' },
+      l: { left: L, top: T, width: 'var(--bw)', height: H },
+      r: { left: `calc(${L} + ${W} - var(--bw))`, top: T, width: 'var(--bw)', height: H },
+    };
+    for (const k in sides) {
+      const el = document.createElement('div');
+      el.className = 'vt-edge';
+      Object.assign(el.style, sides[k]);
+      document.body.append(el);
+      edges.push(el);
+      name(el, 'vt-edge-' + k);
+    }
+  }
+  function removeEdges() { for (const el of edges) el.remove(); edges = []; }
+
+  // Vlucht alleen met transform (verschuiven + schalen) in plaats van breedte/hoogte. Breedte/hoogte rekent Chrome
+  // op de hoofdtaak uit; die is op de nieuwe pagina bezig met opstarten (Webflow, IX3, scripts), en dan bevriest de
+  // vlucht 100–500 ms en springt daarna door. Transform loopt los van de hoofdtaak, zoals Safari het al deed.
+  // Zelfde baan en curve: hoek en maat bewegen lineair met de voortgang, net als bij breedte/hoogte.
+  const shift = t => {
+    if (!t || t === 'none') return [0, 0];
+    const m = /^matrix\(([^)]+)\)$/.exec(t);
+    const v = m && m[1].split(',').map(parseFloat);
+    return v && v[0] === 1 && v[1] === 0 && v[2] === 0 && v[3] === 1 ? [v[4], v[5]] : null;
+  };
+  function compositeFlight() {
+    for (const a of document.getAnimations()) {
+      const fx = a.effect;
+      if (!fx || !/^::view-transition-group\(vt-/.test(fx.pseudoElement || '') || !fx.getKeyframes) continue;
+      const k = fx.getKeyframes();
+      if (k.length !== 2) continue;
+      const [f, t] = k, w0 = parseFloat(f.width), h0 = parseFloat(f.height), w1 = parseFloat(t.width), h1 = parseFloat(t.height);
+      const p0 = shift(f.transform), p1 = shift(t.transform);
+      if (!p0 || !p1 || !(w0 > 0 && h0 > 0 && w1 > 0 && h1 > 0)) continue;
+      fx.setKeyframes([
+        { offset: 0, easing: f.easing, width: w1 + 'px', height: h1 + 'px', transform: `translate(${p0[0]}px, ${p0[1]}px) scale(${w0 / w1}, ${h0 / h1})` },
+        { offset: 1, width: w1 + 'px', height: h1 + 'px', transform: `translate(${p1[0]}px, ${p1[1]}px) scale(1, 1)` },
+      ]);
+    }
+  }
+
   // Namen alleen tijdens een overgang (een view-transition-name maakt van een element een eigen laag)
   let named = [];
   const name = (el, n) => { if (el) { el.style.viewTransitionName = n; named.push(el); } };
   function nameParts(p, stoneEl) {
     name(p.frame, 'vt-frame');
+    makeEdges(p.frame);
     name(p.formula, 'vt-formula');
     name(p.num, 'vt-num');
     name(stoneEl, 'vt-stone');
@@ -158,6 +211,7 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
   function clearNames() {
     for (const el of named) el.style.viewTransitionName = '';
     named = [];
+    removeEdges();
   }
 
   // Vluchtduur volgens motion.md: afstand × 1,875 ms, tussen 750 en 1200 ms
@@ -313,6 +367,7 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     html.style.setProperty('--vt-dur', dur + 'ms');
     const stoneEl = h.stone && parts.stone ? makeClone(parts.stone, h.stone.src, h.stone.aspect) : null;
     nameParts(parts, stoneEl);
+    vt.ready.then(compositeFlight, () => {});
     if (pageKind() === 'detail') {
       html.classList.add('vt-arriving');
       holdIX3(performance.now() + dur * 0.45);
