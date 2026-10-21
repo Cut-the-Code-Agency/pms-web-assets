@@ -18,7 +18,8 @@
 // beneden: foto's (een kleine verkleinde kopie per foto op een canvas, met object-fit en object-position),
 // achtergrondkleuren, linear-gradients en gevulde SVG-vlakken, elk met hun dekking, ook lagen met
 // pointer-events: none (verlopen, kaartbeelden); gemengd tot het eerste dekkende vlak.
-// Video en een nog niet geladen foto tellen als donker (zoals vóór de meting). Hysterese tegen flikkeren.
+// Video en een nog niet geladen foto tellen als donker (zoals vóór de meting). Hysterese en een korte
+// wachttijd (150 ms) tegen flikkeren.
 // Alleen bij scroll, resize, load en als een kopie klaar is, hooguit één keer per animatieframe.
 
 (function () {
@@ -27,6 +28,7 @@
   const TO_DARK = 0.18; // onder deze luminantie: donkere ondergrond → lichte tekst
   const TO_LIGHT = 0.24; // boven deze luminantie: lichte ondergrond → donkere tekst
   const MID = 0.21;
+  const HOLD = 150; // ms dat een nieuwe toon moet blijven staan voordat het onderdeel wisselt
   const SHADE = { dark: [16, 38, 65], light: [240, 242, 244] }; // waarde van een vast "donker"/"licht" punt
   const SAMPLE_WIDTH = 160;
   const OVERRIDE = '[data-section="dark"],[data-section="light"],[data-nav-color="light" i],[data-nav-color="dark" i]';
@@ -76,14 +78,15 @@
   }
 
   // Webflow markeert alleen de link naar de pagina zelf (w--current, aria-current="page"). Op een detailpagina
-  // (/minerals/zircon) wordt de ouderlink (/minerals) actief, met aria-current="true".
+  // (/minerals/zircon) wordt de ouderlink (/minerals) actief: data-nav-current (de head-CSS kijkt naar beide) en
+  // aria-current="true". Niet w--current zelf: webflow.js haalt die bij het starten weer weg.
   function activeParent(nav) {
     const path = location.pathname.replace(/\/+$/, '');
     nav.querySelectorAll('a[href^="/"]').forEach((a) => {
       const p = a.getAttribute('href').replace(/[?#].*$/, '').replace(/\/+$/, '');
       if (!p || path.indexOf(p + '/') !== 0) return;
-      a.classList.add('w--current');
-      if (!a.hasAttribute('aria-current')) a.setAttribute('aria-current', 'true');
+      a.setAttribute('data-nav-current', '');
+      a.setAttribute('aria-current', 'true');
     });
   }
 
@@ -93,6 +96,7 @@
     const parts = ['logo', 'links', 'contact', 'menu-button']
       .map((k) => nav.querySelector(`[data-nav="${k}"]`)).filter(Boolean);
     const tones = new Map();
+    const pending = new Map();
     const samplers = new Map();
     const colourCache = new Map();
     let opacityCache = new Map();
@@ -397,8 +401,18 @@
         if (getComputedStyle(el).visibility !== 'hidden') ghosts.push({ el, r });
       });
       let dark = 0;
+      const now = performance.now();
       parts.forEach((el) => {
-        const t = tone(el, band);
+        const raw = tone(el, band), was = tones.get(el);
+        let t = raw;
+        // Een nieuwe toon moet even blijven staan (HOLD ms), zodat een smalle rand of lijn die onder het onderdeel
+        // door schuift geen knipper geeft. De eerste meting geldt meteen.
+        if (was && t !== was) {
+          const p = pending.get(el);
+          if (!p || p.t !== t) { pending.set(el, { t, since: now }); setTimeout(request, HOLD + 20); t = was; }
+          else if (now - p.since < HOLD) t = was;
+        }
+        if (raw === was || t === raw) pending.delete(el);
         tones.set(el, t);
         if (t === 'dark') dark++;
         if (el.getAttribute('data-nav-tone') !== t) el.setAttribute('data-nav-tone', t);
