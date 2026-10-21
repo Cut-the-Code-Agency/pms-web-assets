@@ -6,6 +6,8 @@
 // Webflow-markup:
 //   [data-readout]            het element met de tekst (ook een wrapper: alle tekst erin doet mee), of een
 //                             SVG-<text>. data-readout="off" zet het uit.
+//   data-readout=".sm-coord"  op een wrapper: alleen de elementen erin die op die selector passen (tekst in
+//                             een embed, die je in Webflow geen attribuut kunt geven).
 //
 // - Speelt alleen bij de overgang onzichtbaar → zichtbaar terwijl het element in beeld is. Zo valt het samen
 //   met de bestaande inlaadanimatie, speelt het opnieuw als een slide weer actief wordt, en niet als een
@@ -24,7 +26,7 @@
 (() => {
   const LEAD = 0.3;    // deel van de tijd waarin alles rolt voordat het eerste teken vastvalt
   const STEP = 0.055;  // s tussen twee willekeurige tekens per plek
-  const LATE = 2;      // s: naloop voor tekst die net buiten beeld verscheen
+  const LATE = 3;      // s: naloop voor tekst die net buiten beeld verscheen
   const POOLS = [
     [/[A-Z]/, 'ABCDEFGHKNOPRSTUVXZ'],
     [/[a-z]/, 'abcdeghknopqrsuvxyz'],
@@ -51,7 +53,8 @@
   // Vliegt mee in een paginaovergang (View Transitions, page-transition.js): niet uitlezen, de tekst staat al vast.
   const inTransition = (el) => {
     if (!('viewTransitionName' in document.documentElement.style)) return false;
-    for (let e = el; e && e.nodeType === 1; e = e.parentElement) if (getComputedStyle(e).viewTransitionName !== 'none') return true;
+    // <html> heeft altijd de naam 'root'; die telt niet.
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) if (getComputedStyle(e).viewTransitionName !== 'none') return true;
     return false;
   };
 
@@ -187,50 +190,68 @@
       item.run = { stop };
     };
 
-    // Nalopen: elementen in beeld elke 2 frames, wachtende (onzichtbare) elementen buiten beeld elke 6 frames.
-    // Onzichtbaar = klaar om te spelen; zichtbaar worden in beeld = spelen. Wordt een wachtend element buiten
-    // beeld zichtbaar (zijn inlaadanimatie speelde net onder de rand, bv. de onderste rij labels van een kaart
-    // of de hoektekst onderin een dia), dan speelt het alsnog als het binnen LATE s in beeld komt; daarna niet
-    // meer, zodat het geen losse animatie wordt bij tekst die er al lang staat.
+    // Nalopen: elementen in beeld elke 2 frames, de rest elke 200 ms. Onzichtbaar = klaar om te spelen;
+    // zichtbaar worden in beeld = spelen. Wordt een element buiten beeld zichtbaar (zijn inlaadanimatie speelde
+    // net onder de rand, bv. de onderste rij labels van een kaart of de hoektekst onderin een dia), dan speelt
+    // het alsnog als het binnen LATE s in beeld komt; daarna niet meer, zodat het geen losse animatie wordt bij
+    // tekst die er al lang staat.
     let raf = 0, frame = 0;
-    const check = (all) => {
+    const check = () => {
       const now = performance.now();
       items.forEach((item, el) => {
-        if (!item.inView && !(all && (item.armed || item.late))) return;
+        if (!item.inView) return;
         if (!shown(el)) {
           if (item.run) item.run.stop(false);
           item.armed = true;
           item.late = 0;
         } else if (item.armed && !item.run) {
           item.armed = false;
-          if (item.inView) play(el, item); else item.late = now + LATE * 1000;
-        } else if (item.late && (item.inView || now >= item.late)) {
-          if (item.inView && now < item.late) play(el, item);
+          play(el, item);
+        } else if (item.late) {
+          if (now < item.late) play(el, item);
           item.late = 0;
         }
       });
     };
-    const busy = () => { for (const item of items.values()) if (item.inView || item.armed || item.late) return true; return false; };
+    const sweep = () => {
+      const now = performance.now();
+      items.forEach((item, el) => {
+        if (item.inView) return;
+        if (!shown(el)) { item.armed = true; item.late = 0; }
+        else if (item.armed) { item.armed = false; item.late = now + LATE * 1000; }
+        else if (item.late && now >= item.late) item.late = 0;
+      });
+    };
+    setInterval(sweep, 200);
     const onFrame = () => {
       raf = 0;
-      frame++;
-      if (frame % 2 === 0) check(frame % 6 === 0);
-      if (busy()) loop();
+      let any = false;
+      items.forEach((item) => { any = any || item.inView; });
+      if (!any) return;
+      if (++frame % 2 === 0) check();
+      loop();
     };
     const loop = () => { if (!raf) raf = requestAnimationFrame(onFrame); };
 
     const io = new IntersectionObserver((entries) => {
       entries.forEach((e) => { const item = items.get(e.target); if (item) item.inView = e.isIntersecting; });
-      check(false);
+      check();
       loop();
     });
 
-    // Opnieuw zoeken na het laden: Swiper (Lumos Slider) maakt kopieën van slides voor de loop.
+    // data-readout met een selector als waarde (bv. ".sm-coord"): de elementen daarbinnen die erop passen doen
+    // mee in plaats van het element zelf (voor tekst in een embed, zoals de SVG van Story Map).
+    const add = (el) => {
+      if (items.has(el)) return;
+      items.set(el, { armed: !shown(el), inView: false, late: 0, run: null });
+      io.observe(el);
+    };
     const scan = () => {
       document.querySelectorAll('[data-readout]').forEach((el) => {
-        if (items.has(el) || /^(off|false|0)$/i.test(el.getAttribute('data-readout').trim())) return;
-        items.set(el, { armed: !shown(el), inView: false, late: 0, run: null });
-        io.observe(el);
+        const v = el.getAttribute('data-readout').trim();
+        if (/^(off|false|0)$/i.test(v)) return;
+        if (!v) { add(el); return; }
+        try { el.querySelectorAll(v).forEach(add); } catch (e) { /* geen geldige selector */ }
       });
       loop();
     };
