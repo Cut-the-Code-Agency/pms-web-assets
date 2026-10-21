@@ -159,17 +159,27 @@
     }
 
     measure();
-    const spots = pickSpots();
-    Object.assign(cur, spots[0]);
-    place();
-
     if (still) {
+      // Stil: het vizier blijft op de plek uit de stijl (geen sprong), alleen de coördinaten van die plek.
+      Object.assign(cur, toLL(target.offsetLeft, target.offsetTop));
+      place();
       if (status) status.style.opacity = '1';
-      const refit = () => { measure(); place(); };
+      // Bij een andere maat blijft het vizier op dezelfde procentuele plek (stijl): coördinaten opnieuw uitrekenen.
+      const refit = () => {
+        target.style.left = '';
+        target.style.top = '';
+        measure();
+        Object.assign(cur, toLL(target.offsetLeft, target.offsetTop));
+        place();
+      };
       img.addEventListener('load', refit);
       if ('ResizeObserver' in window) new ResizeObserver(refit).observe(visual);
       return;
     }
+
+    const spots = pickSpots();
+    Object.assign(cur, spots[0]);
+    place();
 
     const ce = window.CustomEase;
     const EASE_MOVE = ce ? ce.create('nfPosition', 'M0,0 C0.75,0 0.5,1 1,1') : 'power2.inOut';
