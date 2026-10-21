@@ -11,7 +11,7 @@
 //   Beide: de tijd linksonder tikt per seconde.
 //   3. Flare: de rasterlijnen lichten wit op rond de muis; de lichtvlek loopt met vertraging achter de
 //      muis aan (alleen bij een muis).
-//   Altijd (ook bij minder beweging): randteksten blijven aan de rand van het scherm (data-pin).
+//   Altijd (ook bij minder beweging): hoekteksten 0,75rem op 1rem van de kaderlijn, aan de schermrand (data-pin).
 // Waarom een script en geen IX3: de onderdelen zitten in een SVG (alleen zo blijft het raster op elke
 // schermmaat precies op de foto, net als object-fit: cover), IX3 kent geen lus "zolang in beeld" en
 // geen lichtvlek die de muis volgt. Laadt niets zelf; Web Animations API.
@@ -266,29 +266,43 @@
   // het scherm, niet bij de foto: door de uitsnede (slice) valt anders een deel buiten beeld.
   // data-pin: t = boven, l = links, bl / br = hoek linksonder / rechtsonder. Verschuift via het
   // SVG-attribuut transform (de animaties gebruiken alleen opacity op deze elementen).
+  // Hoekteksten (tijd, coördinaten) hebben een vaste maat in schermpixels (0,75rem) en staan even ver
+  // van de kaderlijn van Story Slides naar de zijkant als naar onder (1rem vanaf de binnenkant van de lijn).
+  const META_SIZE = 0.75; // rem
+  const META_GAP = 1;     // rem
   function pin(svg) {
     const [, , vw, vh] = svg.getAttribute('viewBox').split(/[ ,]+/).map(Number);
     const els = [...svg.querySelectorAll('[data-pin]')];
+    const frame = svg.closest('.story-slides_wrap')?.querySelector('.story-slides_frame');
+    const line = frame?.querySelector('.story-slides_line');
     function layout() {
       const r = svg.getBoundingClientRect();
       if (!r.width || !r.height) return;
       const s = Math.max(r.width / vw, r.height / vh);
       const x0 = (vw - r.width / s) / 2, y0 = (vh - r.height / s) / 2; // weggesneden deel per kant
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      // binnenkant van de kaderlijn, gemeten vanaf de rand van de dia (padding van het kader + lijndikte)
+      const inset = frame ? (parseFloat(getComputedStyle(frame).paddingLeft) || 0) + (line ? parseFloat(getComputedStyle(line).borderLeftWidth) || 0 : 0) : 0;
+      const edge = (inset + META_GAP * rem) / s; // in kaarteenheden
       els.forEach((el) => {
         const p = el.dataset.pin;
-        const dx = p === 'l' || p === 'bl' ? x0 : p === 'br' ? -x0 : 0;
-        const dy = p === 't' ? y0 : p === 'bl' || p === 'br' ? -y0 : 0;
+        if (p === 'bl' || p === 'br') {
+          el.setAttribute('font-size', (META_SIZE * rem / s).toFixed(2));
+          el.setAttribute('x', (p === 'bl' ? x0 + edge : vw - x0 - edge).toFixed(1));
+          el.setAttribute('y', (vh - y0 - edge).toFixed(1)); // basislijn: cijfers en hoofdletters staan erop
+          el.setAttribute('text-anchor', p === 'bl' ? 'start' : 'end');
+          el.removeAttribute('transform');
+          return;
+        }
+        const dx = p === 'l' ? x0 : 0, dy = p === 't' ? y0 : 0;
         el.setAttribute('transform', `translate(${dx.toFixed(1)} ${dy.toFixed(1)})`);
       });
-      // Letters/cijfers van een kolom of rij die (bijna) buiten beeld valt: weg, niet half tegen de rand.
-      const edge = 18;
+      // Letters/cijfers (t / l) van een kolom of rij die (bijna) buiten beeld valt: weg, niet half tegen de rand.
       els.forEach((el) => {
         if (el.dataset.pin !== 't' && el.dataset.pin !== 'l') return;
         el.removeAttribute('visibility');
-        const b = el.getBoundingClientRect();
-        const out = el.dataset.pin === 't'
-          ? b.left < r.left + edge || b.right > r.right - edge // letters: kolom aan de zijkant weg
-          : b.top < r.top + edge || b.bottom > r.bottom - edge; // cijfers: rij boven of onder weg
+        const b = el.getBoundingClientRect(), m = 18;
+        const out = el.dataset.pin === 't' ? b.left < r.left + m || b.right > r.right - m : b.top < r.top + m || b.bottom > r.bottom - m;
         if (out) el.setAttribute('visibility', 'hidden');
       });
     }
