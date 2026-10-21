@@ -4,7 +4,8 @@
 //   1. Zoeken: het vizier schuift langs een paar echte plekken die in het vrije deel van de kaart vallen;
 //      per plek knippert het kader en verschijnt kort "No match" (de tekst staat in Webflow, dus vertaalbaar).
 //   2. Daarna rustig zoeken: langzaam naar willekeurige punten, met langere pauzes, zonder melding.
-//   3. Coördinaten rechtsonder (mobiel rechtsboven) tellen tijdens het schuiven mee: ze worden uitgerekend
+//   3. De kruislijnen van het vizier stoppen 1rem vóór de tekst en knoppen (ze lopen er niet doorheen).
+//   4. Coördinaten rechtsonder (mobiel rechtsboven) tellen tijdens het schuiven mee: ze worden uitgerekend
 //      uit de plek van het vizier op de kaart (kalibratie stock-kaart, zie decisions/components/kaart-leadmagnet.md).
 // Pauzeert buiten beeld en in een verborgen tab. prefers-reduced-motion of geen GSAP: het vizier staat stil
 // op één plek, met "No match" en de coördinaten van die plek.
@@ -51,6 +52,14 @@
     [-33.87, 151.21], // Sydney
     [0, -30], // Atlantische Oceaan
     [-40, 80], // Indische Oceaan
+    [51.51, -0.13], // Londen
+    [48.86, 2.35], // Parijs
+    [40.42, -3.7], // Madrid
+    [38.72, -9.14], // Lissabon
+    [41.9, 12.5], // Rome
+    [59.91, 10.75], // Oslo
+    [52.23, 21.01], // Warschau
+    [36.75, 3.06], // Algiers
   ];
   const SEARCH_COUNT = 4;
   const MS_PER_PX = 1.875; // motion.md: timing = afstand × 1,875 ms
@@ -79,12 +88,14 @@
     const status = wrap.querySelector('.not-found_status');
     const coords = wrap.querySelector('.not-found_coords');
     const content = wrap.querySelector('.not-found_content');
+    const arms = ['left', 'right', 'up', 'down'].map((d) => wrap.querySelector(`.not-found_target-line.is-${d}`));
     if (!visual || !img || !target) return;
     const gsap = window.gsap;
     const still = reduce.matches || !gsap;
 
     let geo = null;
     let blocked = [];
+    let textBox = null;
     const cur = { lat: 0, lon: 0 };
 
     function rectOf(el, pad) {
@@ -103,7 +114,8 @@
       const [px, py] = getComputedStyle(img).objectPosition.split(' ').map((v) => (v.endsWith('%') ? parseFloat(v) / 100 : 0.5));
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       geo = { W, H, rem, scale: (PX_PER_DEG * nw * s) / MAP_W, ox: (W - nw * s) * px, oy: (H - nh * s) * py };
-      blocked = [rectOf(content, rem), rectOf(coords, rem)].filter(Boolean);
+      textBox = rectOf(content, rem);
+      blocked = [textBox, rectOf(coords, rem)].filter(Boolean);
     }
     const toXY = (lat, lon) => ({ x: geo.ox + (lon - MAP_LEFT) * geo.scale, y: geo.oy + (MAP_TOP - lat) * geo.scale });
     const toLL = (x, y) => ({ lat: MAP_TOP - (y - geo.oy) / geo.scale, lon: MAP_LEFT + (x - geo.ox) / geo.scale });
@@ -149,11 +161,33 @@
       return path.map(({ lat, lon }) => ({ lat, lon }));
     }
 
+    // Kruislijnen inkorten waar ze de tekst zouden raken (lengte vanaf de opening rond het kader).
+    function clipArms(p) {
+      const b = textBox;
+      const gap = 0.5625 * geo.rem;
+      const len = [null, null, null, null];
+      if (b) {
+        const inRow = p.y >= b.t && p.y <= b.b;
+        const inCol = p.x >= b.l && p.x <= b.r;
+        if (inRow && b.r < p.x) len[0] = p.x - b.r - gap;
+        if (inRow && b.l > p.x) len[1] = b.l - p.x - gap;
+        if (inCol && b.b < p.y) len[2] = p.y - b.b - gap;
+        if (inCol && b.t > p.y) len[3] = b.t - p.y - gap;
+      }
+      arms.forEach((el, i) => {
+        if (!el) return;
+        const prop = i < 2 ? 'width' : 'height';
+        const v = len[i] === null ? '' : `${Math.max(0, len[i]).toFixed(1)}px`;
+        if (el.style[prop] !== v) el.style[prop] = v;
+      });
+    }
+
     let lastText = '';
     function place() {
       const p = toXY(cur.lat, cur.lon);
       target.style.left = `${p.x.toFixed(1)}px`;
       target.style.top = `${p.y.toFixed(1)}px`;
+      clipArms(p);
       const t = coordText(cur);
       if (coords && t !== lastText) { coords.textContent = t; lastText = t; }
     }
@@ -229,7 +263,20 @@
     if ('IntersectionObserver' in window) {
       new IntersectionObserver((entries) => { visible = entries[entries.length - 1].isIntersecting; sync(); }).observe(wrap);
     }
-    const refit = () => { measure(); place(); };
+    // Andere schermmaat: staat het vizier nu buiten het vrije deel, dan meteen naar een vrij punt en verder zoeken.
+    const refit = () => {
+      measure();
+      if (!isFree(toXY(cur.lat, cur.lon))) {
+        Object.assign(cur, randomFree(null));
+        if (current) {
+          current.kill();
+          if (status) gsap.set(status, { opacity: 0 });
+          if (box) gsap.set(box, { opacity: 1 });
+          run();
+        }
+      }
+      place();
+    };
     img.addEventListener('load', refit);
     if ('ResizeObserver' in window) new ResizeObserver(refit).observe(visual);
 
