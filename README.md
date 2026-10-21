@@ -150,3 +150,7 @@ Page-footer van Contact, alle drie met SRI en `defer`:
 - `form-steps.js` — formulier in stappen (`.form_fieldset_wrap.is-step`, `[data-form-next]`, `[data-form-back]`, `[data-form-submit]`, teller `[data-form-step-current]`). Zonder script alle stappen onder elkaar.
 - `quote-slider.js` — Quote Slider: kop "Request a quote for <mineraal>", verborgen veld `input[data-quote-product]` en "View product" (`[data-quote-link] a`) volgen de slide in beeld (`data-name` / `data-slug` op `.mineral-slide_wrap`).
 - v1.35.1: klik op een vierkantje tijdens het schuiven wordt onthouden en daarna uitgevoerd; Quote Slider start vanuit `[data-quote-slider]` en haalt de 15 streepjes uit de tabvolgorde (pijlen en pijltoetsen blijven).
+
+## Nav (`nav.js`, vanaf v1.36.0)
+
+Site settings › Custom code › Footer (site-breed). Taalvenster open/dicht, ingeklapte balk na scrollen, balkkleur per onderdeel uit wat eronder ligt (foto-pixels via een kleine canvaskopie, verlopen en halfdoorzichtige lagen tellen mee; video en een nog niet geladen foto = donker), en de ouderlink actief op detailpagina's. De CSS staat in de site-head. Vangnet op een sectie: `data-section="dark|light"` of `data-nav-color="Light|Dark"` (prop Nav Color). Meten: `window.PMS_NAV_DEBUG = 1` vóór het script zet `data-nav-luminance` op elk onderdeel en tijden in `window.PMS_NAV_TIMES`.
