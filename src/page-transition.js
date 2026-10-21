@@ -9,7 +9,7 @@
   const SCROLL_KEY = 'pms-vt-grid-scroll';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const supported = 'onpagereveal' in window && 'CSSViewTransitionRule' in window;
-  const P = (window.pmsVT = { version: '1.41.0' });
+  const P = (window.pmsVT = { version: '1.45.0' });
 
   // Adressen met en zonder taalvoorvoegsel (/minerals/x, /nl/minerals/x, /de/minerals/x), op elk domein
   const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/minerals(?:\/([a-z0-9-]+))?\/?$/;
@@ -44,10 +44,12 @@ html.vt-leaving :is(.minerals-grid_head, .minerals-grid_item:not(.is-vt-active),
 ::view-transition-old(root) { animation: vt-out 250ms var(--vt-exit) both; z-index: 1; }
 ::view-transition-new(root) { animation: none; }
 ::view-transition-group(vt-frame) { z-index: 2; }
+/* Lijnen vullen hun groep precies: standaard krijgt een beeld de breedte van de groep en een hoogte naar verhouding,
+   dan werd een lijn boven/onder dikker (heen) en een zijlijn veel te lang (terug) */
 .vt-edge { position: fixed; z-index: 2; pointer-events: none; background: var(--vt-border); --bw: var(--border-width--main, 1px); }
 ::view-transition-group(vt-edge-t), ::view-transition-group(vt-edge-r), ::view-transition-group(vt-edge-b), ::view-transition-group(vt-edge-l) { z-index: 2; }
 ::view-transition-old(vt-edge-t), ::view-transition-old(vt-edge-r), ::view-transition-old(vt-edge-b), ::view-transition-old(vt-edge-l),
-::view-transition-new(vt-edge-t), ::view-transition-new(vt-edge-r), ::view-transition-new(vt-edge-b), ::view-transition-new(vt-edge-l) { animation: none; }
+::view-transition-new(vt-edge-t), ::view-transition-new(vt-edge-r), ::view-transition-new(vt-edge-b), ::view-transition-new(vt-edge-l) { animation: none; width: 100%; height: 100%; object-fit: fill; }
 ::view-transition-old(vt-frame) { height: 100%; object-fit: fill; animation: vt-out 200ms var(--vt-exit) both; }
 ::view-transition-new(vt-frame) { display: none; }
 ::view-transition-group(vt-stone) { z-index: 4; }
@@ -246,7 +248,11 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
   }
 
   // ---------- Klik op een kaart in het overzicht ----------
-  let leaving = false;
+  // Klik → de kaart sluit zijn hover (de rest blijft staan) → wissel; de rest vervaagt in de overgang zelf, tegelijk
+  // met het vertrek van het kader (één beweging; vervaagde hij vooraf, dan stond het beeld daarna stil zolang de
+  // productpagina opbouwt). Duurt de wissel langer (geen prefetch, traag netwerk), dan vervaagt de rest alvast.
+  let leaving = false, slowTimer = 0;
+  const clearSlow = () => { clearTimeout(slowTimer); slowTimer = 0; };
   document.addEventListener('click', e => {
     if (pageKind() !== 'grid') return;
     const a = e.target.closest && e.target.closest('.minerals-grid_list .card_mineral_wrap a.clickable_link');
@@ -261,17 +267,22 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     card.closest('.minerals-grid_item').classList.add('is-vt-active');
     calmCard(card);
     a.blur();
-    html.classList.add('vt-leaving');
     const t0 = performance.now();
     P.clickAbs = performance.timeOrigin + t0;
     (function wait() {
-      if (atRest(card) || performance.now() - t0 > 600) requestAnimationFrame(() => { location.href = a.href; });
+      if (atRest(card) || performance.now() - t0 > 600) requestAnimationFrame(() => {
+        location.href = a.href;
+        slowTimer = setTimeout(() => html.classList.add('vt-leaving'), 150);
+      });
       else requestAnimationFrame(wait);
     })();
   }, true);
+  // Uit het geheugen van de browser terug: de wachtende timer niet alsnog laten afgaan
+  addEventListener('pagehide', clearSlow);
 
   // ---------- Oude pagina: vlak voor het wisselen ----------
   addEventListener('pageswap', e => {
+    clearSlow();
     const url = e.viewTransition && e.activation && e.activation.entry && e.activation.entry.url;
     if (!url) return;
     let parts = null;
@@ -339,6 +350,7 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
   // ---------- Nieuwe pagina: vóór het eerste beeld ----------
   addEventListener('pagereveal', e => {
     padNumbers();
+    clearSlow();
     html.classList.remove('vt-leaving', 'vt-arriving', 'vt-returning');
     leaving = false;
     const h = safeJSON(localStorage.getItem(KEY));
