@@ -10,6 +10,7 @@
 //                            een eigen vlak en verandert niet mee.
 //   [data-nav="region"], [data-nav="region-pop"], [data-nav="region-close"]   taalvenster
 //   a[data-nav-lang="en|nl"]  taalkeuze in het taalvenster; krijgt de link naar dezelfde pagina in die taal
+//   Op een Nederlandse pagina krijgen alle interne links zonder taalmap /nl ervoor (zie localPath).
 //
 // Vangnet op een sectie (gaat altijd voor op de meting):
 //   data-section="dark|light"          de sectie is donker/licht (dus lichte/donkere balktekst)
@@ -531,6 +532,29 @@
     }
     update();
   }
+
+  // Interne links in de taal van de pagina. Knoppen en menulinks (Lumos Clickable) hebben een vaste URL
+  // ("/contact"): de Data API kan een link-prop niet op een Webflow-pagina zetten, en alleen paginalinks past
+  // Webflow per taal aan. Op /nl/… krijgt elke interne link zonder taalmap daarom /nl ervoor. Meteen bij het
+  // laden, vóór webflow.js op DOMContentLoaded w--current zet; later toegevoegde links bij de klik.
+  function localPath(href) {
+    const locale = LOCALES[(document.documentElement.lang || 'en').toLowerCase().split('-')[0]];
+    if (!locale || !locale.prefix || !href || href[0] !== '/' || href[1] === '/') return null;
+    const p = locale.prefix;
+    const path = href.replace(/[?#].*$/, '');
+    if (path === p || path.indexOf(p + '/') === 0 || /\.[a-z0-9]+$/i.test(path)) return null;
+    return p + (path === '/' ? '' : path) + href.slice(path.length);
+  }
+  function localizeLink(a) {
+    if (a.hasAttribute('data-nav-lang')) return;
+    const local = localPath(a.getAttribute('href'));
+    if (local) a.setAttribute('href', local);
+  }
+  document.querySelectorAll('a[href^="/"]').forEach(localizeLink);
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="/"]');
+    if (a) localizeLink(a);
+  }, true);
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
