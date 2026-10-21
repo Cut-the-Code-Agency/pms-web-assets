@@ -121,6 +121,11 @@
     }
   }
 
+  // De home van een taal (/nl) is geen ouderpagina, net zo min als /.
+  function isLocaleRoot(p) {
+    return Object.values(LOCALES).some((l) => l.prefix && l.prefix === p);
+  }
+
   // Webflow markeert alleen de link naar de pagina zelf (w--current, aria-current="page"). Op een detailpagina
   // (/minerals/zircon) wordt de ouderlink (/minerals) actief: data-nav-current (de head-CSS kijkt naar beide) en
   // aria-current="true". Niet w--current zelf: webflow.js haalt die bij het starten weer weg.
@@ -128,7 +133,7 @@
     const path = location.pathname.replace(/\/+$/, '');
     nav.querySelectorAll('a[href^="/"]').forEach((a) => {
       const p = a.getAttribute('href').replace(/[?#].*$/, '').replace(/\/+$/, '');
-      if (!p || path.indexOf(p + '/') !== 0) return;
+      if (!p || isLocaleRoot(p) || path.indexOf(p + '/') !== 0) return;
       a.setAttribute('data-nav-current', '');
       a.setAttribute('aria-current', 'true');
     });
