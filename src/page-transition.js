@@ -1,6 +1,7 @@
-// Paginaovergang mineralenkaart ↔ productpagina (View Transitions tussen pagina's).
-// Laden als gewoon script in de <head> van /minerals en het Minerals-sjabloon (niet defer/async): pagereveal moet
-// luisteren vóór het eerste beeld. Samen met <link rel="expect" href="#main" blocking="render"> in dezelfde head.
+// Paginaovergangen (View Transitions tussen pagina's): mineralenkaart ↔ productpagina (eerste blok) en een rustige
+// overgang tussen alle andere pagina's (tweede blok).
+// Laden als gewoon script in de <head> van elke pagina (site-breed, niet defer/async): pagereveal moet luisteren vóór
+// het eerste beeld. Op /minerals en het Minerals-sjabloon staat daarnaast <link rel="expect" href="#main" blocking="render">.
 // Besluit en metingen: PMS-repo decisions/components/kaart-naar-product.md (prototype: prototypes/kaart-naar-product).
 // Browsers zonder overgangen tussen pagina's krijgen een gewone paginawissel; minder beweging: ook.
 (function () {
@@ -9,7 +10,7 @@
   const SCROLL_KEY = 'pms-vt-grid-scroll';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const supported = 'onpagereveal' in window && 'CSSViewTransitionRule' in window;
-  const P = (window.pmsVT = { version: '1.45.0' });
+  const P = (window.pmsVT = { version: '1.52.0' });
 
   // Adressen met en zonder taalvoorvoegsel (/minerals/x, /nl/minerals/x, /de/minerals/x), op elk domein
   const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/minerals(?:\/([a-z0-9-]+))?\/?$/;
@@ -404,4 +405,189 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
 
   // Productpagina direct geopend: steen alvast klaarzetten voor de weg terug
   addEventListener('DOMContentLoaded', () => { if (pageKind() === 'detail') { const p = detailParts(); if (p) prepareClone(p.stone); } });
+})();
+
+// ---------- Rustige overgang tussen alle andere pagina's ----------
+// De nav blijft stilstaan, het blokje van de actieve balklink glijdt met een boogje naar de nieuwe link, alleen de
+// inhoud wisselt zacht (Opacity uit motion.md); daarna laadt de pagina in zoals altijd (IX3). Vanuit het open menu
+// blijft het menu open tot de wissel en schuift het paneel op de nieuwe pagina omhoog weg, zoals bij sluiten.
+// Kaart ↔ productpagina: dat doet het blok hierboven (de vliegende kaart). Besluit: PMS-repo decisions/motion.md
+// ("Rustige paginaovergang"); prototype: prototypes/pagina-overgang/.
+(function () {
+  const html = document.documentElement;
+  const KEY = 'pms-calm';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const supported = 'onpagereveal' in window && 'CSSViewTransitionRule' in window;
+  const safeJSON = s => { try { return JSON.parse(s) || {}; } catch { return {}; } };
+  const C = (window.pmsCalm = { version: (window.pmsVT && window.pmsVT.version) || '' });
+  if (reduce || !supported) return;
+
+  const k = 1;
+  const FADE = 300 * k; // Opacity: 300 ms, cubic-bezier(.5,0,.5,1)
+  const NEW_DELAY = 150 * k; // oude inhoud uit, nieuwe 150 ms later in (door de paginakleur heen)
+  const OPACITY = 'cubic-bezier(.5,0,.5,1)', POSITION = 'cubic-bezier(.75,0,.5,1)', EXIT = 'cubic-bezier(.5,0,.75,1)';
+  const MENU = 750 * k; // menu open + link: het paneel schuift op de nieuwe pagina weg (Position exit, motion.md)
+
+  // Kaart ↔ productpagina: dat doet page-transition.js (zelfde adresregels)
+  const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/minerals(?:\/([a-z0-9-]+))?\/?$/;
+  const pathOf = url => new URL(url, location.href).pathname;
+  const slugOf = url => (pathOf(url).match(PATH) || [])[1] || null;
+  const isGrid = url => { const m = pathOf(url).match(PATH); return !!m && !m[1]; };
+  const byCard = (from, to) => !!window.pmsVT && ((isGrid(from) && !!slugOf(to)) || (!!slugOf(from) && isGrid(to)));
+
+  const css = `
+@view-transition { navigation: auto; }
+html.pms-calm-vt::view-transition { background: var(--pms-calm-bg, transparent); }
+html.pms-calm-vt::view-transition-old(root) { animation: pms-calm-out ${FADE}ms ${OPACITY} both; mix-blend-mode: normal; z-index: auto; }
+html.pms-calm-vt::view-transition-new(root) { animation: pms-calm-in ${FADE}ms ${OPACITY} ${NEW_DELAY}ms both; mix-blend-mode: normal; }
+html.pms-calm-vt::view-transition-group(root) { animation: none; }
+html.pms-calm-vt::view-transition-group(pms-nav) { animation: none; z-index: 2; }
+/* De standaard overvloeier neemt zijn duur en fill over van de groep; die staat stil (animation: none), dus zonder
+   eigen fill stond de oude nav na afloop weer vol naast de nieuwe (tekst dubbel, donkerder) */
+html.pms-calm-vt::view-transition-old(pms-nav), html.pms-calm-vt::view-transition-new(pms-nav) { animation-duration: ${FADE}ms; animation-timing-function: ${OPACITY}; animation-fill-mode: both; }
+html.pms-calm-vt::view-transition-group(pms-marker) { z-index: 3; animation-duration: var(--pms-calm-move, 750ms); animation-timing-function: ${POSITION}; transform-origin: 0 0; }
+html.pms-calm-vt::view-transition-old(pms-marker), html.pms-calm-vt::view-transition-new(pms-marker) { animation: none; }
+html.pms-calm-vt::view-transition-old(pms-marker):only-child { animation: pms-calm-out ${FADE}ms ${OPACITY} both; }
+html.pms-calm-vt::view-transition-new(pms-marker):only-child { animation: pms-calm-in ${FADE}ms ${OPACITY} ${NEW_DELAY}ms both; }
+html.pms-calm-vt [data-nav="links"] .nav_link::before { visibility: hidden; }
+/* Vanuit het open menu: de nieuwe pagina staat meteen onder het paneel, het paneel schuift omhoog weg zoals bij sluiten */
+html.pms-calm-menu::view-transition-old(root) { animation: none; opacity: 0; }
+html.pms-calm-menu::view-transition-new(root) { animation: none; }
+html.pms-calm-menu::view-transition-group(pms-menu) { animation: none; z-index: 1; }
+html.pms-calm-menu::view-transition-old(pms-menu) { animation: pms-calm-menu-up ${MENU}ms ${EXIT} both; }
+@keyframes pms-calm-menu-up { to { translate: 0 -100%; } }
+.pms-calm-marker { position: fixed; pointer-events: none; z-index: 2147483000; }
+@keyframes pms-calm-out { to { opacity: 0; } }
+@keyframes pms-calm-in { from { opacity: 0; } }
+`;
+  const style = document.createElement('style');
+  style.id = 'pms-calm';
+  style.textContent = css;
+  document.head.append(style);
+
+  // Alle pagina's van de site alvast ophalen bij hover (geen prerender: dat brak de kaartovergang af)
+  if (window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('speculationrules')) {
+    const rules = document.createElement('script');
+    rules.type = 'speculationrules';
+    rules.textContent = JSON.stringify({ prefetch: [{ where: { href_matches: '/*' }, eagerness: 'moderate' }] });
+    document.head.append(rules);
+  }
+
+  // ---------- Nav en blokje ----------
+  const navEl = () => document.querySelector('[data-nav="component"]');
+  // Het blokje is een ::before op de actieve balklink (head-CSS van de nav, alleen ≥ 992 px); hier als los element
+  // op dezelfde plek, zodat het als eigen laag van link naar link kan glijden
+  function markerRect() {
+    const link = document.querySelector('[data-nav="links"] .nav_link:is(.w--current, [data-nav-current])');
+    if (!link || !link.getClientRects().length) return null;
+    const cs = getComputedStyle(link, '::before');
+    if (cs.content === 'none' || cs.display === 'none') return null;
+    const r = link.getBoundingClientRect();
+    const w = parseFloat(cs.width), h = parseFloat(cs.height);
+    if (!(w > 0 && h > 0) || r.width === 0) return null;
+    return { left: r.left + parseFloat(cs.left), top: r.top + parseFloat(cs.top), width: w, height: h, color: cs.backgroundColor };
+  }
+  let marker = null, named = [];
+  function name(el, n) { if (el) { el.style.viewTransitionName = n; named.push(el); } }
+  const menuOpen = () => !!document.querySelector('[data-nav="component"] [data-nav="menu-button"].w--open');
+  const menuPanel = () => [...document.querySelectorAll('[data-nav="component"] [data-nav="panel"]')].find(el => el.getClientRects().length && el.getBoundingClientRect().height > 0);
+  function setup(m, panel) {
+    name(navEl(), 'pms-nav');
+    name(panel, 'pms-menu');
+    if (m) {
+      marker = document.createElement('div');
+      marker.className = 'pms-calm-marker';
+      marker.setAttribute('aria-hidden', 'true');
+      Object.assign(marker.style, { left: m.left + 'px', top: m.top + 'px', width: m.width + 'px', height: m.height + 'px', background: m.color });
+      document.body.append(marker);
+      name(marker, 'pms-marker');
+    }
+    // Achtergrond van de pagina (met korrel) achter de wissel, zodat de inhoud erdoorheen vervaagt en niet door wit
+    const bg = getComputedStyle(document.body);
+    html.style.setProperty('--pms-calm-bg', bg.backgroundColor === 'rgba(0, 0, 0, 0)' ? getComputedStyle(html).backgroundColor : bg.backgroundColor);
+    html.classList.add('pms-calm-vt');
+  }
+  function cleanup() {
+    for (const el of named) el.style.viewTransitionName = '';
+    named = [];
+    if (marker) { marker.remove(); marker = null; }
+    html.classList.remove('pms-calm-vt', 'pms-calm-menu');
+  }
+
+  // ---------- Klik op een link in het open menu ----------
+  // De Webflow Navbar sluit het menu meteen bij een klik op een link erin; dan schoof het paneel al weg terwijl de
+  // nieuwe pagina nog laadde, en vervaagde het daarna nog eens los (hard). Het menu blijft nu open tot de wissel;
+  // het paneel schuift op de nieuwe pagina omhoog weg. De link zelf werkt gewoon (geen preventDefault).
+  let heldMenu = false;
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('[data-nav="panel"] a[href]');
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (a.target && a.target !== '_self')) return;
+    const to = new URL(a.href, location.href);
+    if (to.origin !== location.origin || (to.pathname === location.pathname && to.search === location.search)) return;
+    if (!menuOpen()) return;
+    e.stopPropagation();
+    heldMenu = true;
+  }, true);
+  // Terug uit het geheugen van de browser: het menu stond nog open, nu gewoon sluiten
+  addEventListener('pageshow', e => {
+    if (!e.persisted || !heldMenu) return;
+    heldMenu = false;
+    const btn = document.querySelector('[data-nav="component"] [data-nav="menu-button"].w--open');
+    if (btn) btn.click();
+  });
+
+  // ---------- Oude pagina: vlak voor het wisselen ----------
+  addEventListener('pageswap', e => {
+    const to = e.activation && e.activation.entry && e.activation.entry.url;
+    if (!e.viewTransition || !to || e.activation.navigationType === 'reload') return;
+    const calm = !byCard(location.href, to);
+    const menu = calm && menuOpen();
+    const m = calm && !menu ? markerRect() : null; // open menu: de balklinks zijn weg, het blokje komt gewoon op
+    sessionStorage.setItem(KEY, JSON.stringify({ from: location.href, at: Date.now(), calm, menu, marker: m }));
+    if (!calm) return;
+    setup(m, menu ? menuPanel() : null);
+    e.viewTransition.finished.finally(cleanup);
+  });
+
+  // Inladen (IX3) pas als de nieuwe inhoud opkomt: de GSAP-klok van Webflow tot dan vasthouden
+  function holdIX3(until) {
+    let paused = false, done = false;
+    const tryPause = () => {
+      if (done || paused || !window.gsap) return paused;
+      gsap.globalTimeline.pause();
+      return (paused = true);
+    };
+    document.addEventListener('DOMContentLoaded', tryPause, { capture: true, once: true });
+    (function poll() { if (!tryPause() && !done) requestAnimationFrame(poll); })();
+    setTimeout(() => { done = true; if (paused) gsap.globalTimeline.resume(); }, Math.max(0, until - performance.now()));
+  }
+
+  // ---------- Nieuwe pagina: vóór het eerste beeld ----------
+  addEventListener('pagereveal', e => {
+    cleanup(); // terug uit het geheugen van de browser
+    const d = safeJSON(sessionStorage.getItem(KEY));
+    sessionStorage.removeItem(KEY);
+    const vt = e.viewTransition;
+    if (!vt || !d.calm || Date.now() - d.at > 10000 || (d.from && byCard(d.from, location.href))) { C.last = null; return; }
+    // Blokje: pas na de opbouw van de nav staat de actieve link op zijn plek (lettertype, nav.js); meten vlak voor het
+    // vastleggen van de nieuwe stand
+    const m = markerRect();
+    const dist = m && d.marker ? Math.hypot(m.left - d.marker.left, m.top - d.marker.top) : 0;
+    html.style.setProperty('--pms-calm-move', Math.min(1100, Math.max(750, dist * 1.875)) * k + 'ms'); // motion.md
+    setup(m);
+    if (d.menu) html.classList.add('pms-calm-menu');
+    holdIX3(performance.now() + (d.menu ? MENU * 0.4 : NEW_DELAY));
+    // Een klein boogje over de woorden: recht vooruit liep het blokje door de bovenkant van de letters
+    if (m && d.marker && dist > 1) vt.ready.then(() => {
+      const lift = m.height + 2;
+      html.animate([
+        { transform: 'translateY(0)', easing: OPACITY },
+        { transform: `translateY(${-lift}px)`, offset: 0.5, easing: OPACITY },
+        { transform: 'translateY(0)' },
+      ], { pseudoElement: '::view-transition-group(pms-marker)', duration: Math.min(1100, Math.max(750, dist * 1.875)) * k, composite: 'add' });
+    }, () => {});
+    C.last = { marker: !!m, from: !!d.marker, dist: Math.round(dist), menu: !!d.menu };
+    vt.finished.finally(cleanup);
+  });
+
 })();
