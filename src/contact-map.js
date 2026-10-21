@@ -5,7 +5,9 @@
 //      PMS en de adreskaart klapt uit (Scale vanuit linksboven).
 //   2. Locaties: klik op een vierkantje (knop) → open adreskaart klapt in, het vizier schuift naar
 //      die locatie (coördinaten rechtsonder lopen mee), de nieuwe kaart klapt uit op een plek met
-//      ruimte (niet onder het formulier, niet buiten beeld). De twee andere vierkantjes pulseren zacht.
+//      ruimte (niet onder het formulier, niet buiten beeld). Elk vierkantje heeft een naam ernaast (actief
+//      wit, de rest grijs); de andere vierkantjes lichten om de beurt op met een uitdijende ring, zoals de
+//      wereldkaart op About.
 //   3. Flare: rasterlijnen lichten wit op rond de muis, lichtvlek loopt vertraagd mee (alleen muis).
 //   Altijd (ook bij minder beweging): viewBox per breedte, klok linksonder (Nederlandse tijd).
 // Waarom een script: raster en punten zitten in een SVG over de foto, wisselen vraagt een vizier dat
@@ -15,12 +17,14 @@
 //   svg[data-contact-map]                 data-vb-desktop / data-vb-compact (≤ 991 px) / data-vb-band (rem)
 //     .cm-v / .cm-h  rasterlijnen
 //     .cm-square[data-cm-place=key][data-lat][data-lon]      .cm-target  vizier (translate in kaarteenheden)
-//   button.contact-map_marker[data-place=key]   .contact-map_card[data-place=key] (+ is-active)
+//   button.contact-map_marker[data-place=key] › .contact-map_marker_label (naam; + is-active / is-hover)
+//   .contact-map_card[data-place=key] (+ is-active)
 //   [data-contact-map-time]  [data-contact-map-coords]   .contact-map_panel (formulier, kaart blijft ernaast)
 
 (() => {
   const EASE = 'cubic-bezier(0.75, 0, 0.5, 1)';
   const EASE_IN = 'cubic-bezier(0.5, 0, 0.75, 1)';
+  const EASE_OUT = 'cubic-bezier(0.25, 1, 0.5, 1)';
   const NS = 'http://www.w3.org/2000/svg';
   const FLARE_RADIUS = '15rem';
   const FLARE_COLOR = 'rgba(255, 255, 255, 0.95)';
@@ -153,6 +157,7 @@
         key, sq, lat: +sq.dataset.lat, lon: +sq.dataset.lon,
         x: +sq.getAttribute('x') + 12, y: +sq.getAttribute('y') + 12,
         btn: wrap.querySelector(`.contact-map_marker[data-place="${key}"]`),
+        label: wrap.querySelector(`.contact-map_marker[data-place="${key}"] .contact-map_marker_label`),
         card: wrap.querySelector(`.contact-map_card[data-place="${key}"]`),
       };
     });
@@ -198,12 +203,35 @@
         p.btn.style.top = `${pt.y.toFixed(1)}px`;
       });
     }
-    function layout() { layoutSvg(svg); placeMarkers(); placeCard(active); }
+    // Namen staan rechts van hun vierkantje; botst een naam met een ander vierkantje, een andere naam of de
+    // open adreskaart, dan gaat hij links (is-left). Op mobiel liggen PMS en TYMO dicht bij elkaar.
+    const hit = (a, b, m = 0) => a.left < b.right + m && a.right > b.left - m && a.top < b.bottom + m && a.bottom > b.top - m;
+    function placeLabels() {
+      const taken = [];
+      const cardBox = active.card && !compact.matches ? active.card.getBoundingClientRect() : null;
+      places.forEach((p) => {
+        const l = p.label;
+        if (!l) return;
+        l.classList.remove('is-left');
+        const others = places.filter((q) => q !== p).map((q) => q.btn && q.btn.getBoundingClientRect())
+          .filter(Boolean).map((r) => { const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2; return { left: cx - 8, right: cx + 8, top: cy - 8, bottom: cy + 8 }; });
+        const clear = (r) => !others.some((o) => hit(r, o, 4)) && !taken.some((t) => hit(r, t, 4)) && !(cardBox && hit(r, cardBox, 4));
+        let r = l.getBoundingClientRect();
+        if (!clear(r)) {
+          l.classList.add('is-left');
+          const left = l.getBoundingClientRect();
+          if (clear(left)) r = left; else l.classList.remove('is-left');
+        }
+        taken.push(r);
+      });
+    }
+    function layout() { layoutSvg(svg); placeMarkers(); placeCard(active); placeLabels(); }
     function setState(p) {
       places.forEach((q) => {
         const on = q === p;
         q.sq.classList.toggle('is-active', on);
         if (q.btn) q.btn.setAttribute('aria-expanded', String(on));
+        if (q.label) q.label.classList.toggle('is-active', on);
         if (q.card) q.card.classList.toggle('is-active', on);
       });
     }
@@ -246,6 +274,7 @@
       active = p;
       setState(p);
       placeCard(p);
+      placeLabels();
       if (anim && p.card) play(p.card, [{ transform: 'scale(0)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }],
         { duration: 450, easing: EASE });
       busy = false;
@@ -253,13 +282,17 @@
       queued = null;
       if (next && next !== active) select(next);
     }
+    const hover = (p, on) => {
+      p.sq.classList.toggle('is-hover', on && p !== active);
+      if (p.label) p.label.classList.toggle('is-hover', on && p !== active);
+    };
     places.forEach((p) => {
       if (!p.btn) return;
-      p.btn.addEventListener('click', () => select(p));
-      p.btn.addEventListener('pointerenter', () => p !== active && p.sq.classList.add('is-hover'));
-      p.btn.addEventListener('pointerleave', () => p.sq.classList.remove('is-hover'));
-      p.btn.addEventListener('focus', () => p !== active && p.sq.classList.add('is-hover'));
-      p.btn.addEventListener('blur', () => p.sq.classList.remove('is-hover'));
+      p.btn.addEventListener('click', () => { hover(p, false); select(p); });
+      p.btn.addEventListener('pointerenter', () => hover(p, true));
+      p.btn.addEventListener('pointerleave', () => hover(p, false));
+      p.btn.addEventListener('focus', () => hover(p, true));
+      p.btn.addEventListener('blur', () => hover(p, false));
     });
 
     if (!canAnimate()) return;
@@ -273,6 +306,8 @@
     const frame = target.querySelector('.cm-frame');
     frame.style.transform = 'scale(0)';
     const meta = [time, coords].filter(Boolean);
+    const labels = places.map((p) => p.label).filter(Boolean);
+    labels.forEach((l) => (l.style.opacity = '0'));
     meta.forEach((m) => (m.style.opacity = '0'));
     if (active.card) active.card.style.transform = 'scale(0)';
 
@@ -293,10 +328,12 @@
       play(frame, [{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 450, delay: 1350, easing: EASE });
       if (active.card) play(active.card, [{ transform: 'scale(0)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], { duration: 750, delay: 1500, easing: EASE });
       meta.forEach((m) => play(m, [{ opacity: '0' }, { opacity: '1' }], { duration: 500, delay: 600, easing: 'linear' }));
+      labels.forEach((l, i) => play(l, [{ opacity: '0' }, { opacity: '1' }], { duration: 500, delay: 900 + i * 90, easing: 'linear' }));
       await wait(1100 + Math.max(v.length, h.length) * 40);
     }
 
-    // Zachte puls op de vierkantjes die je kunt aanklikken, om de beurt, zolang de kaart te zien is.
+    // Vierkantjes die je kunt aanklikken lichten om de beurt op, zolang de kaart te zien is: het vierkantje
+    // groeit en een ring (omtrek van het vierkantje) dijt uit en vervaagt, zoals de wereldkaart op About.
     let visible = true, built = false, turn = 0;
     new IntersectionObserver((e) => { visible = e[0].isIntersecting; }, { threshold: 0.15 }).observe(wrap);
     function pulse() {
@@ -304,7 +341,17 @@
         const others = places.filter((p) => p !== active);
         const p = others[turn++ % others.length];
         if (p && !p.sq.classList.contains('is-hover')) {
-          p.sq.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.5)', offset: 0.4 }, { transform: 'scale(1)' }],
+          const ring = p.sq.cloneNode();
+          ring.removeAttribute('class');
+          ring.removeAttribute('style');
+          Object.assign(ring.style, {
+            fill: 'none', stroke: 'var(--_theme---text, #f0f2f4)', strokeWidth: '1', vectorEffect: 'non-scaling-stroke',
+            transformBox: 'fill-box', transformOrigin: '50% 50%', scale: getComputedStyle(p.sq).scale, pointerEvents: 'none',
+          });
+          p.sq.before(ring);
+          ring.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(3.2)', opacity: 0 }],
+            { duration: 1600, easing: EASE_OUT }).finished.then(() => ring.remove(), () => ring.remove());
+          p.sq.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.9)', offset: 0.4 }, { transform: 'scale(1)' }],
             { duration: 1100, easing: EASE });
         }
       }
