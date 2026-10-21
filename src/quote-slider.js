@@ -1,6 +1,8 @@
 // Quote Slider (Contact): de offerte hoort bij het mineraal dat in de slider in beeld is.
 // Markup (Webflow-component Quote Slider):
-//   [data-quote-title="Request a quote for"]   kop; wordt "Request a quote for <mineraal>"
+//   [data-quote-title="Request a quote for"]   kop; wordt "Request a quote for <mineraal>". Vanaf 992 px staat
+//                                               de naam op een eigen regel en is de kop zo hoog als de hoogste
+//                                               naam (formulier verspringt niet); ≤ 991 zoals voorheen.
 //   [data-quote-slider]                         kaart met de Lumos Slider (Swiper) en Mineral Slides
 //     .mineral-slide_wrap[data-name][data-slug] één mineraal (Name / Slug uit het CMS)
 //     [data-quote-link] a                       "View product" → /minerals/<slug>
@@ -10,6 +12,9 @@
 
 (() => {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const wide = window.matchMedia('(min-width: 992px)');
+  // Kop: op desktop de naam op een eigen regel, kleiner gewoon erachter.
+  const head = (prefix, ...name) => (wide.matches ? [prefix, document.createElement('br'), ...name] : [`${prefix} `, ...name]);
 
   function nameOf(slide) {
     if (!slide) return '';
@@ -42,7 +47,7 @@
       }
       if (!title || !name || name === last) return;
       last = name;
-      if (reduce.matches || !('animate' in title)) { title.textContent = `${prefix} ${name}`; return; }
+      if (reduce.matches || !('animate' in title)) { title.replaceChildren(...head(prefix, name)); return; }
       swap(name);
     }
 
@@ -85,7 +90,7 @@
       sr.textContent = name;
       const vis = letters(name);
       vis.setAttribute('data-quote-name', '');
-      title.replaceChildren(`${prefix} `, sr, vis);
+      title.replaceChildren(...head(prefix, sr, vis));
       [...vis.querySelectorAll('[data-quote-char]')].forEach((c, i) => c.animate([{ transform: 'translateY(110%)' }, { transform: 'translateY(0)' }],
         { duration: 750, delay: i * 25, easing: IN, fill: 'backwards' }));
     }
@@ -95,11 +100,38 @@
     const first = card.querySelector('.mineral-slide_wrap');
     const firstName = nameOf(first);
     if (firstName) {
-      if (title) title.textContent = `${prefix} ${firstName}`;
+      if (title) title.replaceChildren(...head(prefix, firstName));
       if (input) input.value = firstName;
       const slug = first.getAttribute('data-slug');
       if (link && slug) link.setAttribute('href', `/minerals/${slug}`);
       last = firstName;
+    }
+
+    // Desktop: kophoogte vast op de hoogste variant, zodat het formulier niet verspringt bij korte en lange
+    // namen. ≤ 991 geen vaste hoogte vanuit het script (daar gelden de min-heights uit de embed).
+    if (title) {
+      const names = [...new Set([...card.querySelectorAll('.mineral-slide_wrap')].map(nameOf).filter(Boolean))];
+      const fit = () => {
+        if (!wide.matches) { title.style.minHeight = ''; return; }
+        const probe = title.cloneNode(false);
+        probe.removeAttribute('aria-live');
+        probe.setAttribute('aria-hidden', 'true');
+        Object.assign(probe.style, { position: 'absolute', visibility: 'hidden', minHeight: '0', width: `${title.clientWidth}px`, left: '0', top: '0' });
+        title.parentNode.append(probe);
+        let h = 0;
+        for (const n of names) { probe.replaceChildren(prefix, document.createElement('br'), n); h = Math.max(h, probe.offsetHeight); }
+        probe.remove();
+        if (h) title.style.minHeight = `${Math.ceil(h)}px`;
+      };
+      fit();
+      if (document.fonts) document.fonts.ready.then(fit);
+      wide.addEventListener('change', () => {
+        // Breedte wisselt over 992 px: kop opnieuw opbouwen in de juiste vorm (zonder animatie).
+        if (last) title.replaceChildren(...head(prefix, last));
+        fit();
+      });
+      let w = title.clientWidth;
+      if ('ResizeObserver' in window) new ResizeObserver(() => { if (title.clientWidth !== w) { w = title.clientWidth; fit(); } }).observe(title);
     }
 
     // De Lumos Slider maakt Swiper aan na het laden; wacht tot hij er is.

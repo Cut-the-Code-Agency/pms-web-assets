@@ -20,6 +20,8 @@
 //   button.contact-map_marker[data-place=key] › .contact-map_marker_label (naam; + is-active / is-hover)
 //   .contact-map_card[data-place=key] (+ is-active)
 //   [data-contact-map-time]  [data-contact-map-coords]   .contact-map_panel (formulier, kaart blijft ernaast)
+// Vierkantjes (.cm-dots) en vizier (.cm-target) verhuizen naar een eigen SVG-laag in .contact-map_markers,
+// na de knoppen: zo liggen ze boven de namen. Adreskaarten en formulier liggen daar weer boven (z-index 3).
 
 (() => {
   const EASE = 'cubic-bezier(0.75, 0, 0.5, 1)';
@@ -143,15 +145,32 @@
     return { ready() { ready = true; } };
   }
 
+  // Vierkantjes en vizier boven de namen: zelfde viewBox en schaal, dus dezelfde plek op de kaart.
+  function lift(svg, wrap) {
+    const host = wrap.querySelector('.contact-map_markers');
+    const dots = svg.querySelector('.cm-dots'), target = svg.querySelector('.cm-target');
+    if (!host || !dots || !target) return;
+    const layer = document.createElementNS(NS, 'svg');
+    for (const a of ['viewBox', 'preserveAspectRatio']) layer.setAttribute(a, svg.getAttribute(a));
+    layer.setAttribute('class', 'contact-map_svg');
+    layer.setAttribute('aria-hidden', 'true');
+    layer.setAttribute('focusable', 'false');
+    layer.append(dots, target);
+    host.append(layer);
+    new MutationObserver(() => layer.setAttribute('viewBox', svg.getAttribute('viewBox')))
+      .observe(svg, { attributes: true, attributeFilter: ['viewBox'] });
+  }
+
   function setup(wrap) {
     const svg = wrap.querySelector('svg[data-contact-map]');
     if (!svg || wrap.dataset.contactMapReady) return;
     wrap.dataset.contactMapReady = 'true';
-    const target = svg.querySelector('.cm-target');
+    lift(svg, wrap);
+    const target = wrap.querySelector('.cm-target');
     const coords = wrap.querySelector('[data-contact-map-coords]');
     const time = wrap.querySelector('[data-contact-map-time]');
     const panel = wrap.querySelector('.contact-map_panel');
-    const places = [...svg.querySelectorAll('[data-cm-place]')].map((sq) => {
+    const places = [...wrap.querySelectorAll('[data-cm-place]')].map((sq) => {
       const key = sq.dataset.cmPlace;
       return {
         key, sq, lat: +sq.dataset.lat, lon: +sq.dataset.lon,
@@ -304,7 +323,7 @@
     v.forEach((l) => (l.style.transform = 'scaleY(0)'));
     h.forEach((l) => (l.style.transform = 'scaleX(0)'));
     places.forEach((p) => (p.sq.style.opacity = '0'));
-    svg.querySelectorAll('.cm-cross').forEach((l) => (l.style.transform = l.classList.contains('cm-cross-v') ? 'scaleY(0)' : 'scaleX(0)'));
+    wrap.querySelectorAll('.cm-cross').forEach((l) => (l.style.transform = l.classList.contains('cm-cross-v') ? 'scaleY(0)' : 'scaleX(0)'));
     const frame = target.querySelector('.cm-frame');
     frame.style.transform = 'scale(0)';
     const meta = [time, coords].filter(Boolean);
@@ -321,7 +340,7 @@
         play(p.sq, [{ transform: 'scale(0)' }, { transform: end }], { duration: 600, delay: 500 + i * 90, easing: EASE })
           .finished.then(() => { p.sq.style.transform = ''; });
       });
-      svg.querySelectorAll('.cm-cross').forEach((l) => {
+      wrap.querySelectorAll('.cm-cross').forEach((l) => {
         const ax = l.classList.contains('cm-cross-v') ? 'scaleY' : 'scaleX';
         play(l, [{ transform: `${ax}(0)` }, { transform: `${ax}(1)` }], { duration: 900, delay: 900, easing: EASE });
       });
