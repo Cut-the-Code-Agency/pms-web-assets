@@ -3,24 +3,28 @@
 // erbij hoort staat in de site-head (wf-pms: references/nav-custom-code.html, decisions/components/nav.md).
 //
 // Webflow-markup (staat al in de Nav):
-//   [data-nav="component"]   de nav; krijgt data-nav-scrolled, data-region-open en data-nav-theme
+//   [data-nav="component"]   de nav; krijgt data-nav-scrolled en data-region-open
 //   [data-nav="bar"]         de balk
-//   [data-nav="logo" | "links" | "contact" | "menu-button"]   krijgen elk data-nav-tone="dark|light":
-//                            de toon van wat eronder ligt (dark = lichte tekst, via de head-CSS)
+//   [data-nav="logo" | "links" | "menu-button"]   krijgen elk data-nav-tone="dark|light": de toon van wat
+//                            eronder ligt (dark = lichte tekst, via de head-CSS). Contact niet: die knop heeft
+//                            een eigen vlak en verandert niet mee.
 //   [data-nav="region"], [data-nav="region-pop"], [data-nav="region-close"]   taalvenster
 //
 // Vangnet op een sectie (gaat altijd voor op de meting):
 //   data-section="dark|light"          de sectie is donker/licht (dus lichte/donkere balktekst)
 //   data-nav-color="Light|Dark"        de balktekst is licht/donker (prop Nav Color op Story Slide en
-//                                      Page Hero; "Automatic" of leeg = meten)
+//                                      Page Hero; hoofdletters en spaties maken niet uit; "Automatic",
+//                                      leeg of iets anders = meten)
 //
 // Meting: per onderdeel kolommen van ~2,5 rem met elk 3 vakjes. Per vakje de lagen onder de balk van boven naar
 // beneden: foto's (een kleine verkleinde kopie per foto op een canvas, met object-fit en object-position),
 // achtergrondkleuren, linear-gradients en gevulde SVG-vlakken, elk met hun dekking, ook lagen met
 // pointer-events: none (verlopen, kaartbeelden); gemengd tot het eerste dekkende vlak.
-// Video en een nog niet geladen foto tellen als donker (zoals vóór de meting). Hysterese en een korte
-// wachttijd (150 ms) tegen flikkeren.
-// Alleen bij scroll, resize, load en als een kopie klaar is, hooguit één keer per animatieframe.
+// Video en een nog niet geladen foto tellen als donker (zoals vóór de meting). Uitzondering bij het laden: zolang
+// de foto onder een onderdeel nog niet klaar is, krijgt het nog geen toon (hooguit 2 s), zodat de balk boven een
+// lichte hero niet even licht wordt. Hysterese en een korte wachttijd (150 ms) tegen flikkeren.
+// Bij scroll (en nog 3 keer tot 1,6 s erna, voor foto's die na het stoppen wisselen), resize, load en als een
+// kopie klaar is, hooguit één keer per animatieframe.
 
 (function () {
   // Tekstkleuren van de balk: light-150 (licht) en dark-800 (donker). Gelijk contrast bij L ≈ 0,21;
@@ -31,7 +35,9 @@
   const HOLD = 150; // ms dat een nieuwe toon moet blijven staan voordat het onderdeel wisselt
   const SHADE = { dark: [16, 38, 65], light: [240, 242, 244] }; // waarde van een vast "donker"/"licht" punt
   const SAMPLE_WIDTH = 160;
-  const OVERRIDE = '[data-section="dark"],[data-section="light"],[data-nav-color="light" i],[data-nav-color="dark" i]';
+  const OVERRIDE = '[data-section="dark"],[data-section="light"],[data-nav-color]';
+  const FIRST_WAIT = 2000; // ms dat de eerste meting op een foto mag wachten
+  const SETTLE = [300, 800, 1600]; // ms na de laatste scroll: nog eens meten
   const SHAPES = /^(rect|path|circle|ellipse|polygon)$/i;
 
   function init() {
@@ -93,14 +99,18 @@
   function barColour(nav) {
     const bar = nav.querySelector('[data-nav="bar"]');
     if (!bar) return;
-    const parts = ['logo', 'links', 'contact', 'menu-button']
+    const parts = ['logo', 'links', 'menu-button']
       .map((k) => nav.querySelector(`[data-nav="${k}"]`)).filter(Boolean);
     const tones = new Map();
     const pending = new Map();
     const samplers = new Map();
     const colourCache = new Map();
     let opacityCache = new Map();
+    let rectCache = new Map();
+    let forcedCache = new Map();
     let ghosts = [];
+    let waiting = false; // de laatste tone() stuitte op een foto die nog niet klaar is
+    const born = performance.now();
     let candidates = null;
     // Alles met pointer-events: none dat iets tekent (foto, video, SVG-beeld, achtergrond). Eén keer bij laden en
     // na resize, niet per frame (getComputedStyle over de hele pagina).
@@ -119,12 +129,14 @@
     probe.canvas.width = probe.canvas.height = 1;
 
     // Elke CSS-kleur (ook lab()/oklab(), die Webflow schrijft) naar [r, g, b, a] via een 1 × 1-canvas.
+    // Geen kleur (fill: none, url(#verloop)) geeft null.
     function colour(str) {
-      if (!str || str === 'transparent') return null;
+      if (!str || str === 'transparent' || str === 'none') return null;
       let c = colourCache.get(str);
       if (c === undefined) {
         const m = str.match(/^rgba?\(([^)]+)\)$/);
-        if (m) {
+        if (!m && !CSS.supports('color', str)) c = null;
+        else if (m) {
           const p = m[1].split(/[\s,/]+/).filter(Boolean).map(parseFloat);
           c = [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
         } else {
@@ -138,6 +150,27 @@
         colourCache.set(str, c);
       }
       return c && c[3] > 0 ? c : null;
+    }
+
+    function rect(el) {
+      let r = rectCache.get(el);
+      if (!r) { r = el.getBoundingClientRect(); rectCache.set(el, r); }
+      return r;
+    }
+
+    // Vangnet boven el: true = donker (lichte tekst), false = licht, null = meten.
+    function forced(el) {
+      let f = forcedCache.get(el);
+      if (f !== undefined) return f;
+      f = null;
+      for (let m = el.closest(OVERRIDE); m && f === null; m = m.parentElement && m.parentElement.closest(OVERRIDE)) {
+        const sec = m.getAttribute('data-section');
+        const col = (m.getAttribute('data-nav-color') || '').trim().toLowerCase();
+        if (sec === 'dark' || sec === 'light') f = sec === 'dark';
+        else if (col === 'light' || col === 'dark') f = col === 'light';
+      }
+      forcedCache.set(el, f);
+      return f;
     }
 
     function luminance(c) {
@@ -190,7 +223,7 @@
         } catch (e) { s.failed = true; }
         request();
       };
-      im.onerror = () => { s.failed = true; };
+      im.onerror = () => { s.failed = true; request(); };
       im.src = url;
       return s;
     }
@@ -268,37 +301,45 @@
       return stops[stops.length - 1].c;
     }
 
-    // Kleur die je op punt (x, y) ziet, met stack = elementsFromPoint van zijn kolom en cell = het vlak waarvoor
-    // dit punt staat.
-    // Geeft [r, g, b]; een vangnet of iets wat niet te meten is geeft de vaste kleur SHADE.dark/light.
-    function seen(stack, x, y, cell) {
+    // Kleur die je op punt (x, y) ziet, met stack = elementsFromPoint van zijn kolom, hidden = de lagen met
+    // pointer-events: none op datzelfde punt (de middenlijn) en cell = het vlak waarvoor dit punt staat.
+    // Lagen tellen alleen waar ze het punt ook echt bedekken (een rij boven de bovenrand van een kaart ziet die
+    // kaart niet). Geeft [r, g, b]; een vangnet of iets wat niet te meten is geeft de vaste kleur SHADE.dark/light.
+    function seen(stack, hidden, x, y, cell) {
       const layers = [];
       let base = null;
       const add = (c, a) => { if (a >= 0.99) base = c.slice(0, 3); else if (a > 0.01) layers.push([c[0], c[1], c[2], a]); };
       // Eén element als laag; zet base als het dekkend is (dan stopt het meten).
+      // Foto nog niet klaar: telt als donker, en bij de eerste meting wacht het onderdeel erop.
+      const notYet = () => { base = SHADE.dark; waiting = true; };
       function layer(el) {
         const o = opacity(el);
         if (o <= 0.01) return;
+        const box = rect(el);
         const tag = el.tagName;
-        if (tag === 'VIDEO') { base = SHADE.dark; return; }
-        if (tag === 'CANVAS') { base = SHADE.dark; return; }
         if (tag === 'IMG') {
-          if (!el.complete || !el.naturalWidth) { base = SHADE.dark; return; }
+          if (cell.bottom < box.top || cell.top > box.bottom) return;
+          if (!el.complete || !el.naturalWidth) { notYet(); return; }
           const s = sampler(smallest(el));
-          if (s.failed || !s.ready) { base = SHADE.dark; return; }
+          if (s.failed) { base = SHADE.dark; return; }
+          if (!s.ready) { notYet(); return; }
           const cs = getComputedStyle(el);
-          const c = photo(s, el.getBoundingClientRect(), cs.objectFit, cs.objectPosition, cell);
+          const c = photo(s, box, cs.objectFit, cs.objectPosition, cell);
           if (c) add(c, c[3] * o);
           return;
         }
         if (tag.toLowerCase() === 'image' && el instanceof SVGElement) {
+          if (cell.bottom < box.top || cell.top > box.bottom) return;
           const s = sampler(el.href.baseVal);
-          if (s.failed || !s.ready) { base = SHADE.dark; return; }
+          if (s.failed) { base = SHADE.dark; return; }
+          if (!s.ready) { notYet(); return; }
           const par = el.getAttribute('preserveAspectRatio') || '';
-          const c = photo(s, el.getBoundingClientRect(), /slice/.test(par) ? 'cover' : par === 'none' ? 'fill' : 'contain', '50% 50%', cell);
+          const c = photo(s, box, /slice/.test(par) ? 'cover' : par === 'none' ? 'fill' : 'contain', '50% 50%', cell);
           if (c) add(c, c[3] * o);
           return;
         }
+        if (box.top > y || box.bottom < y || box.left > x || box.right < x) return;
+        if (tag === 'VIDEO' || tag === 'CANVAS') { base = SHADE.dark; return; }
         if (el instanceof SVGElement && tag.toLowerCase() !== 'svg') {
           if (!SHAPES.test(tag)) return;
           const cs = getComputedStyle(el), c = colour(cs.fill);
@@ -308,7 +349,6 @@
         const cs = getComputedStyle(el);
         const bg = cs.backgroundImage;
         if (bg && bg !== 'none') {
-          const box = el.getBoundingClientRect();
           // Lagen staan van boven naar beneden in de lijst.
           const list = bg.split(/,(?![^(]*\))(?=\s*(?:linear-gradient|radial-gradient|conic-gradient|repeating-|url|image-set))/);
           for (let i = 0; i < list.length && !base; i++) {
@@ -318,7 +358,8 @@
               if (c) add(c, c[3] * o);
             } else if (l.startsWith('url(')) {
               const s = sampler(l.slice(4, -1).replace(/^["']|["']$/g, ''));
-              if (s.failed || !s.ready) { base = SHADE.dark; return; }
+              if (s.failed) { base = SHADE.dark; return; }
+              if (!s.ready) { notYet(); return; }
               const c = photo(s, box, cs.backgroundSize === 'contain' ? 'contain' : 'cover', cs.backgroundPosition, cell);
               if (c) add(c, c[3] * o);
             }
@@ -331,15 +372,13 @@
       // Lagen met pointer-events: none (verlopen over een foto, kaartbeeld, steen) vindt elementsFromPoint niet.
       // Ze liggen boven een geraakt element als ze erin zitten of verderop in de pagina staan (zelfde volgorde als
       // de browser tekent, z-index buiten beschouwing), dus daar worden ze ingevoegd, de bovenste eerst.
-      const hidden = ghosts.filter((g) => g.r.left <= x && g.r.right >= x && g.r.top <= y && g.r.bottom >= y);
+      hidden = hidden.slice();
       for (let i = 0; i < stack.length && !base; i++) {
         const el = stack[i];
         if (nav.contains(el)) continue;
-        const marked = el.closest(OVERRIDE);
-        if (marked) {
-          const sec = marked.getAttribute('data-section');
-          const dark = sec ? sec === 'dark' : marked.getAttribute('data-nav-color').toLowerCase() === 'light';
-          base = SHADE[dark ? 'dark' : 'light'];
+        const f = forced(el);
+        if (f !== null) {
+          base = SHADE[f ? 'dark' : 'light'];
           break;
         }
         for (let j = hidden.length - 1; j >= 0 && !base; j--) {
@@ -358,6 +397,7 @@
 
     // Toon van wat onder één onderdeel ligt: kolommen van ~2,5 rem (3–8) over zijn breedte, elk met één
     // elementsFromPoint op de middenlijn van de balk (dat is het dure deel), en per kolom 3 vakjes boven elkaar.
+    // null = nog geen toon (eerste meting, foto nog niet klaar).
     function tone(el, band) {
       const r = el.getBoundingClientRect();
       if (!r.width) return tones.get(el) || 'light';
@@ -365,18 +405,22 @@
       const h = bottom > top ? bottom - top : band.bottom - band.top, y0 = bottom > top ? top : band.top;
       const cols = Math.min(8, Math.max(3, Math.round(r.width / 40))), rows = 3;
       const sum = [0, 0, 0];
+      waiting = false;
       for (let col = 0; col < cols; col++) {
         const left = r.left + r.width * col / cols, right = r.left + r.width * (col + 1) / cols, x = (left + right) / 2;
-        const stack = document.elementsFromPoint(x, y0 + h / 2);
+        const sy = y0 + h / 2;
+        const stack = document.elementsFromPoint(x, sy);
+        const hidden = ghosts.filter((g) => g.r.left <= x && g.r.right >= x && g.r.top <= sy && g.r.bottom >= sy);
         for (let row = 0; row < rows; row++) {
           const cell = { left, right, top: y0 + h * row / rows, bottom: y0 + h * (row + 1) / rows };
-          const c = seen(stack, x, (cell.top + cell.bottom) / 2, cell);
+          const c = seen(stack, hidden, x, (cell.top + cell.bottom) / 2, cell);
           sum[0] += c[0]; sum[1] += c[1]; sum[2] += c[2];
         }
       }
       const L = luminance(sum.map((v) => v / (rows * cols)));
       if (window.PMS_NAV_DEBUG) el.setAttribute('data-nav-luminance', L.toFixed(3));
       const was = tones.get(el);
+      if (!was && waiting && performance.now() - born < FIRST_WAIT) return null;
       if (!was) return L < MID ? 'dark' : 'light';
       if (was === 'light' && L < TO_DARK) return 'dark';
       if (was === 'dark' && L > TO_LIGHT) return 'light';
@@ -388,6 +432,8 @@
       ticking = false;
       const t0 = window.PMS_NAV_DEBUG && performance.now();
       opacityCache = new Map();
+      rectCache = new Map();
+      forcedCache = new Map();
       // Voorbij de balkhoogte gescrold: de head-CSS klapt de links in (en bovenaan weer uit).
       const scrolled = window.scrollY > bar.offsetHeight;
       if (nav.hasAttribute('data-nav-scrolled') !== scrolled) nav.toggleAttribute('data-nav-scrolled', scrolled);
@@ -399,11 +445,13 @@
         const r = el.getBoundingClientRect();
         if (r.bottom < band.top || r.top > band.bottom || !r.width || !el.isConnected) return;
         if (getComputedStyle(el).visibility !== 'hidden') ghosts.push({ el, r });
+        rectCache.set(el, r);
       });
-      let dark = 0;
       const now = performance.now();
+      let later = false;
       parts.forEach((el) => {
         const raw = tone(el, band), was = tones.get(el);
+        if (raw === null) { later = true; return; }
         let t = raw;
         // Een nieuwe toon moet even blijven staan (HOLD ms), zodat een smalle rand of lijn die onder het onderdeel
         // door schuift geen knipper geeft. De eerste meting geldt meteen.
@@ -414,16 +462,21 @@
         }
         if (raw === was || t === raw) pending.delete(el);
         tones.set(el, t);
-        if (t === 'dark') dark++;
         if (el.getAttribute('data-nav-tone') !== t) el.setAttribute('data-nav-tone', t);
       });
-      // data-nav-theme blijft voor metingen en oudere regels: de toon van de meeste onderdelen.
-      const theme = dark * 2 >= parts.length ? 'dark' : 'light';
-      if (nav.getAttribute('data-nav-theme') !== theme) nav.setAttribute('data-nav-theme', theme);
+      // Vangnet als een kopie nooit klaar meldt: na FIRST_WAIT krijgt elk onderdeel toch een toon.
+      if (later) setTimeout(request, 250);
       if (t0) (window.PMS_NAV_TIMES = window.PMS_NAV_TIMES || []).push(performance.now() - t0);
     }
     function request() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
-    window.addEventListener('scroll', request, { passive: true });
+    // Na het stoppen kan er nog iets wisselen onder de balk (Services-foto's wisselen 250 ms na stilstand en
+    // vloeien 1,2 s over), dus nog een paar keer meten.
+    let settle = [];
+    window.addEventListener('scroll', () => {
+      request();
+      settle.forEach(clearTimeout);
+      settle = SETTLE.map((d) => setTimeout(request, d));
+    }, { passive: true });
     window.addEventListener('resize', () => { candidates = null; request(); });
     window.addEventListener('load', () => { candidates = null; request(); setTimeout(() => { candidates = null; request(); }, 2000); });
     // Een foto die onder de balk ligt en net geladen is (lazy): opnieuw meten.
