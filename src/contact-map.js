@@ -295,7 +295,9 @@
       p.btn.addEventListener('blur', () => hover(p, false));
     });
 
-    if (!canAnimate()) return;
+    // Namen staan in Webflow op opacity 0 (zonder script staan de knoppen nog niet op hun plek).
+    const labels = places.map((p) => p.label).filter(Boolean);
+    if (!canAnimate()) { labels.forEach((l) => (l.style.opacity = '1')); return; }
 
     // Opbouw (bij laden: de kaart staat bovenaan de pagina)
     const v = [...svg.querySelectorAll('.cm-v')], h = [...svg.querySelectorAll('.cm-h')];
@@ -306,8 +308,6 @@
     const frame = target.querySelector('.cm-frame');
     frame.style.transform = 'scale(0)';
     const meta = [time, coords].filter(Boolean);
-    const labels = places.map((p) => p.label).filter(Boolean);
-    labels.forEach((l) => (l.style.opacity = '0'));
     meta.forEach((m) => (m.style.opacity = '0'));
     if (active.card) active.card.style.transform = 'scale(0)';
 
