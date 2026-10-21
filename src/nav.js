@@ -9,6 +9,7 @@
 //                            eronder ligt (dark = lichte tekst, via de head-CSS). Contact niet: die knop heeft
 //                            een eigen vlak en verandert niet mee.
 //   [data-nav="region"], [data-nav="region-pop"], [data-nav="region-close"]   taalvenster
+//   a[data-nav-lang="en|nl"]  taalkeuze in het taalvenster; krijgt de link naar dezelfde pagina in die taal
 //
 // Vangnet op een sectie (gaat altijd voor op de meting):
 //   data-section="dark|light"          de sectie is donker/licht (dus lichte/donkere balktekst)
@@ -44,6 +45,7 @@
     const nav = document.querySelector('[data-nav="component"]');
     if (!nav) return;
     regionDropdown(nav);
+    languageLinks(nav);
     activeParent(nav);
     barColour(nav);
   }
@@ -81,6 +83,41 @@
     if (menuButton) new MutationObserver(() => {
       if (!menuButton.classList.contains('w--open')) setOpen(false);
     }).observe(menuButton, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // Taalkeuze in het taalvenster (Webflow Localization: Engels in de hoofdmap, Nederlands op /nl, overal
+  // dezelfde paden en slugs, decisions/meertaligheid.md). Elke a[data-nav-lang="en|nl"] gaat naar dezelfde pagina
+  // in die taal; de huidige taal krijgt aria-current en het gevulde rondje, en PMS | EN wordt PMS | NL.
+  // De taal komt uit <html lang> (zet Webflow per taal).
+  const LOCALES = { en: { prefix: '', name: 'English' }, nl: { prefix: '/nl', name: 'Nederlands' } };
+  function languageLinks(nav) {
+    const links = nav.querySelectorAll('a[data-nav-lang]');
+    if (!links.length) return;
+    const code = (document.documentElement.lang || 'en').toLowerCase().split('-')[0];
+    const current = LOCALES[code] ? code : 'en';
+    const prefixes = Object.values(LOCALES).map((l) => l.prefix).filter(Boolean);
+    let path = location.pathname;
+    prefixes.forEach((p) => { if (path === p || path.indexOf(p + '/') === 0) path = path.slice(p.length) || '/'; });
+    const fill = nav.querySelector('.region_lang .region_radio_fill');
+    links.forEach((a) => {
+      const lang = a.getAttribute('data-nav-lang').trim().toLowerCase();
+      const locale = LOCALES[lang];
+      if (!locale) return;
+      a.href = (locale.prefix + (path === '/' ? '' : path) || '/') + location.search;
+      a.hreflang = lang;
+      if (lang === current) {
+        a.setAttribute('aria-current', 'true');
+        const radio = a.querySelector('.region_radio');
+        if (fill && radio && !radio.contains(fill)) radio.appendChild(fill);
+      } else {
+        a.removeAttribute('aria-current');
+      }
+    });
+    const toggle = nav.querySelector('[data-nav="region"]');
+    if (toggle) {
+      toggle.textContent = 'PMS | ' + current.toUpperCase();
+      toggle.setAttribute('aria-label', 'Region and language: PMS, ' + LOCALES[current].name);
+    }
   }
 
   // Webflow markeert alleen de link naar de pagina zelf (w--current, aria-current="page"). Op een detailpagina
