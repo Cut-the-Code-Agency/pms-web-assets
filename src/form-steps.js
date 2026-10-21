@@ -4,8 +4,8 @@
 //     fieldset.form_fieldset_wrap.is-step  één stap (minstens twee, anders doet het script niets)
 //     [data-form-steps-count] › [data-form-step-current] / [data-form-step-total]   teller "1/3"
 //     [data-form-back] [data-form-next] [data-form-submit]                         knoppen (Button Main erin)
-// Continue controleert de velden van de huidige stap (browservalidatie: required, type=email, verplichte
-// radiogroep) en gaat pas dan door; Enter in een veld doet hetzelfde. De verzendknop staat alleen op de
+// Continue controleert de velden van de huidige stap (required, type=email, verplichte radiogroep; meldingen
+// via form-errors.js) en gaat pas dan door; Enter in een veld doet hetzelfde. De verzendknop staat alleen op de
 // laatste stap. Zonder script staan alle stappen onder elkaar en verstuurt het formulier gewoon.
 
 (() => {
@@ -48,8 +48,10 @@
       }
     }
 
-    // Klopt de huidige stap? Toont anders de melding van de browser bij het eerste foute veld.
+    // Klopt de huidige stap? Met form-errors.js (site-footer) rode meldingen onder de foute velden,
+    // anders de melding van de browser bij het eerste foute veld.
     function valid() {
+      if (window.pmsFormErrors) return window.pmsFormErrors.check(form, steps[at]);
       for (const f of fields(steps[at])) {
         if (!f.checkValidity()) { f.reportValidity(); return false; }
       }

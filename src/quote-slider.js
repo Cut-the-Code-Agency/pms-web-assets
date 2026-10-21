@@ -41,17 +41,53 @@
         if (name) link.setAttribute('aria-label', `View product: ${name}`);
       }
       if (!title || !name || name === last) return;
-      const text = `${prefix} ${name}`;
-      if (last && !reduce.matches && 'animate' in title) {
-        title.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'cubic-bezier(0.5, 0, 0.5, 1)' })
-          .finished.then(() => {
-            title.textContent = text;
-            title.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'cubic-bezier(0.5, 0, 0.5, 1)' });
-          }).catch(() => { title.textContent = text; });
-      } else {
-        title.textContent = text;
-      }
       last = name;
+      if (reduce.matches || !('animate' in title)) { title.textContent = `${prefix} ${name}`; return; }
+      swap(name);
+    }
+
+    // Wissel van mineraal: de letters van de oude naam gaan omhoog uit hun masker, die van de nieuwe
+    // komen er letter voor letter in (zoals de titels in de slider op Home: 750 ms, 0.75,0,0.5,1, 25 ms).
+    // "Request a quote for" blijft staan. Schermlezers lezen de naam uit een sr-only kopie.
+    const IN = 'cubic-bezier(0.75, 0, 0.5, 1)', OUT = 'cubic-bezier(0.5, 0, 0.75, 1)';
+    let run = 0;
+    function letters(name) {
+      const wrap = document.createElement('span');
+      wrap.setAttribute('aria-hidden', 'true');
+      name.split(' ').forEach((word, i) => {
+        if (i) wrap.append(' ');
+        const w = document.createElement('span');
+        w.style.cssText = 'display:inline-block;white-space:nowrap';
+        for (const ch of word) {
+          const mask = document.createElement('span');
+          mask.style.cssText = 'display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:0.12em;margin-bottom:-0.12em';
+          const c = document.createElement('span');
+          c.style.cssText = 'display:inline-block';
+          c.setAttribute('data-quote-char', '');
+          c.textContent = ch;
+          mask.append(c);
+          w.append(mask);
+        }
+        wrap.append(w);
+      });
+      return wrap;
+    }
+    async function swap(name) {
+      const me = ++run;
+      const old = [...title.querySelectorAll('[data-quote-char]')];
+      if (old.length) {
+        await Promise.all(old.map((c, i) => c.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-110%)' }],
+          { duration: 300, delay: i * 10, easing: OUT, fill: 'forwards' }).finished.catch(() => {})));
+        if (me !== run) return;
+      }
+      const sr = document.createElement('span');
+      sr.className = 'u-sr-only';
+      sr.textContent = name;
+      const vis = letters(name);
+      vis.setAttribute('data-quote-name', '');
+      title.replaceChildren(`${prefix} `, sr, vis);
+      [...vis.querySelectorAll('[data-quote-char]')].forEach((c, i) => c.animate([{ transform: 'translateY(110%)' }, { transform: 'translateY(0)' }],
+        { duration: 750, delay: i * 25, easing: IN, fill: 'backwards' }));
     }
 
     // Meteen (vóór Webflow de titel in letters splitst voor de inlaadanimatie) de kop zetten op het

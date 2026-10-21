@@ -144,12 +144,16 @@ In Webflow, page-footer van About us:
 <script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.33.0/dist/story-map.js" integrity="…" crossorigin="anonymous" defer></script>
 ```
 
-## Contact (v1.35.1)
+## Contact (v1.38.0)
 Page-footer van Contact, alle drie met SRI en `defer`:
 - `contact-map.js` — Contact Map: kaart bouwt op bij laden (lijnen, vierkantjes vanuit het midden, vizier, adreskaart), klik op een vierkantje schuift het vizier naar die vestiging en opent de adreskaart op een plek met ruimte; flare rond de muis zoals Story Map; klok (Nederlandse tijd) en coördinaten van de actieve vestiging. viewBox per breedte (`data-vb-desktop` / `data-vb-compact`).
 - `form-steps.js` — formulier in stappen (`.form_fieldset_wrap.is-step`, `[data-form-next]`, `[data-form-back]`, `[data-form-submit]`, teller `[data-form-step-current]`). Zonder script alle stappen onder elkaar.
 - `quote-slider.js` — Quote Slider: kop "Request a quote for <mineraal>", verborgen veld `input[data-quote-product]` en "View product" (`[data-quote-link] a`) volgen de slide in beeld (`data-name` / `data-slug` op `.mineral-slide_wrap`).
 - v1.35.1: klik op een vierkantje tijdens het schuiven wordt onthouden en daarna uitgevoerd; Quote Slider start vanuit `[data-quote-slider]` en haalt de 15 streepjes uit de tabvolgorde (pijlen en pijltoetsen blijven).
+- v1.38.0: adreskaart groeit uit de hoek bij het vierkantje (`transform-origin` per plek); ≤ 991 loopt de kaart door achter adreskaart en formulier (`data-vb-band`, `data-vb-line-end`); producttitel boven het offerteformulier wisselt letter voor letter (oude naam uit het masker omhoog, nieuwe erin, sr-only kopie voor schermlezers); stappen gebruiken `form-errors.js`.
+
+## Formulieren (v1.38.0)
+Site-footer: `form-errors.js` — verzendknoppen altijd klikbaar; bij versturen of Continue een rode melding (`.form_field_error`) onder elk fout verplicht veld, `aria-invalid` + `aria-describedby`, focus op het eerste foute veld; melding verdwijnt zodra het veld klopt. Teksten per formulier uit `data-error-required/-email/-choice/-terms` (vertaalbaar), anders Engels. Zet `novalidate` op elk formulier; zonder script de gewone browsercontrole.
 
 ## Nav (`nav.js`, vanaf v1.36.0)
 

@@ -12,7 +12,7 @@
 // vanaf zijn huidige plek verder schuift, en IX3 kent geen lichtvlek die de muis volgt.
 //
 // Markup (binnen .contact-map_wrap):
-//   svg[data-contact-map]                 data-vb-desktop / data-vb-compact (≤ 991 px)
+//   svg[data-contact-map]                 data-vb-desktop / data-vb-compact (≤ 991 px) / data-vb-band (rem)
 //     .cm-v / .cm-h  rasterlijnen
 //     .cm-square[data-cm-place=key][data-lat][data-lon]      .cm-target  vizier (translate in kaarteenheden)
 //   button.contact-map_marker[data-place=key]   .contact-map_card[data-place=key] (+ is-active)
@@ -76,9 +76,26 @@
 
   // viewBox per breedte (desktop / ≤ 991 px). Geen letters en cijfers langs de rand: op About weggehaald
   // ("te druk", feedback 2026-10-20), hier dus ook niet.
+  // ≤ 991 loopt de kaart door achter de adreskaart en het formulier (Afrika, zoals Figma mobiel). De
+  // bovenste band (data-vb-band, in rem) toont data-vb-compact zoals voorheen (meet); daaronder loopt de
+  // kaart op dezelfde schaal door tot de onderkant van het vak.
   function layoutSvg(svg) {
-    const vb = compact.matches ? svg.dataset.vbCompact : svg.dataset.vbDesktop;
+    let vb = compact.matches ? svg.dataset.vbCompact : svg.dataset.vbDesktop;
+    const r = svg.getBoundingClientRect();
+    if (vb && compact.matches && r.width && r.height) {
+      const [x, y, w, h] = vb.split(/\s+/).map(Number);
+      const band = (parseFloat(svg.dataset.vbBand) || 0) * parseFloat(getComputedStyle(document.documentElement).fontSize) || r.height;
+      const s = Math.min(r.width / w, Math.min(band, r.height) / h);
+      const vw = r.width / s, vh = r.height / s;
+      vb = `${(x + w / 2 - vw / 2).toFixed(1)} ${y} ${vw.toFixed(1)} ${vh.toFixed(1)}`;
+    }
     if (vb && svg.getAttribute('viewBox') !== vb) svg.setAttribute('viewBox', vb);
+    // Verticale lijnen lopen ≤ 991 door tot data-vb-line-end; op desktop houden ze hun lengte (zelfde tekensnelheid).
+    const end = svg.dataset.vbLineEnd;
+    if (end) svg.querySelectorAll('.cm-v').forEach((l) => {
+      if (!l.dataset.y2) l.dataset.y2 = l.getAttribute('y2');
+      l.setAttribute('y2', compact.matches ? end : l.dataset.y2);
+    });
   }
 
   function flare(svg, wrap) {
@@ -151,7 +168,7 @@
     function placeCard(p) {
       const c = p.card;
       if (!c) return;
-      if (compact.matches) { c.style.left = ''; c.style.top = ''; return; }
+      if (compact.matches) { c.style.left = ''; c.style.top = ''; c.style.transformOrigin = ''; return; }
       const pt = toLocal(svg, wrap, p.x, p.y);
       const w = c.offsetWidth, h = c.offsetHeight, W = wrap.clientWidth, H = wrap.clientHeight;
       const pr = panel ? panel.getBoundingClientRect() : null, wr = wrap.getBoundingClientRect();
@@ -170,6 +187,8 @@
       q.y = Math.max(EDGE + 80, Math.min(q.y, H - EDGE - 40 - h));
       c.style.left = `${Math.round(q.x)}px`;
       c.style.top = `${Math.round(q.y)}px`;
+      // De kaart groeit uit de hoek die het dichtst bij het vierkantje ligt (NL rechtsboven, ES linksonder).
+      c.style.transformOrigin = `${q.x + w / 2 < pt.x ? '100%' : '0%'} ${q.y + h / 2 < pt.y ? '100%' : '0%'}`;
     }
     function placeMarkers() {
       places.forEach((p) => {
