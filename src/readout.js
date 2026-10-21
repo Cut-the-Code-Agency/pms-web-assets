@@ -12,7 +12,8 @@
 // - Speelt alleen bij de overgang onzichtbaar → zichtbaar terwijl het element in beeld is. Zo valt het samen
 //   met de bestaande inlaadanimatie, speelt het opnieuw als een slide weer actief wordt, en niet als een
 //   tekst al zichtbaar was (bv. kaarten die buiten beeld al ingeladen zijn, terug via de paginaovergang).
-//   Verscheen de tekst net buiten beeld en komt hij binnen 2 s in beeld, dan speelt het alsnog.
+//   Verscheen de tekst net buiten beeld (binnen 60 % schermhoogte van de rand) en komt hij binnen 3 s in
+//   beeld, dan speelt het alsnog.
 // - Alleen A–Z, a–z en 0–9 rollen (hoofdletter blijft hoofdletter, cijfer blijft cijfer); al het andere
 //   (₂, °, ′, spaties, leestekens) blijft op zijn plek staan.
 // - Niets verspringt: elk teken krijgt tijdens het rollen de breedte van zijn echte teken (SVG: textLength).
@@ -218,7 +219,12 @@
       items.forEach((item, el) => {
         if (item.inView) return;
         if (!shown(el)) { item.armed = true; item.late = 0; }
-        else if (item.armed) { item.armed = false; item.late = now + LATE * 1000; }
+        else if (item.armed) {
+          item.armed = false;
+          // Alleen vlak bij de rand (binnen 60 % van de schermhoogte): verder weg is de inlaadanimatie echt voorbij.
+          const r = el.getBoundingClientRect();
+          if (r.top < innerHeight * 1.6 && r.bottom > -innerHeight * 0.6) item.late = now + LATE * 1000;
+        }
         else if (item.late && now >= item.late) item.late = 0;
       });
     };
