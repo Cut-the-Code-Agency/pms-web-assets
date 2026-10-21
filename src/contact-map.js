@@ -17,7 +17,8 @@
 //   svg[data-contact-map]                 data-vb-desktop / data-vb-compact (≤ 991 px) / data-vb-band (rem)
 //     .cm-v / .cm-h  rasterlijnen
 //     .cm-square[data-cm-place=key][data-lat][data-lon]      .cm-target  vizier (translate in kaarteenheden)
-//   button.contact-map_marker[data-place=key] › .contact-map_marker_label (naam; + is-active / is-hover)
+//   button.contact-map_marker[data-place=key] › .contact-map_marker_label (naam; + is-active / is-hover,
+//                                                 hoek via is-left / is-up)
 //   .contact-map_card[data-place=key] (+ is-active)
 //   [data-contact-map-time]  [data-contact-map-coords]   .contact-map_panel (formulier, kaart blijft ernaast)
 // Vierkantjes (.cm-dots) en vizier (.cm-target) verhuizen naar een eigen SVG-laag in .contact-map_markers,
@@ -222,26 +223,46 @@
         p.btn.style.top = `${pt.y.toFixed(1)}px`;
       });
     }
-    // Namen staan rechts van hun vierkantje; botst een naam met een ander vierkantje, een andere naam of de
-    // open adreskaart, dan gaat hij links (is-left). Op mobiel liggen PMS en TYMO dicht bij elkaar.
+    // Namen staan vanuit de hoek rechtsonder van hun vierkantje, zodat de vizierlijnen (horizontaal en
+    // verticaal door het vierkantje) er langs lopen. Botst een naam met een ander vierkantje, een andere naam,
+    // de open adreskaart, het formulier of de rand, dan wijkt hij uit naar linksonder, rechtsboven of linksboven
+    // (is-left / is-up). Op mobiel liggen PMS en TYMO dicht bij elkaar.
     const hit = (a, b, m = 0) => a.left < b.right + m && a.right > b.left - m && a.top < b.bottom + m && a.bottom > b.top - m;
+    const CORNERS = [[], ['is-left'], ['is-up'], ['is-left', 'is-up']];
     function placeLabels() {
       const taken = [];
-      const cardBox = active.card && !compact.matches ? active.card.getBoundingClientRect() : null;
+      // Adreskaart zonder transform meten: tijdens het in-/uitklappen staat hij op scale(0).
+      const box = (e) => {
+        const o = e.offsetParent && e.offsetParent.getBoundingClientRect();
+        if (!o) return e.getBoundingClientRect();
+        const left = o.left + e.offsetLeft, top = o.top + e.offsetTop;
+        return { left, top, right: left + e.offsetWidth, bottom: top + e.offsetHeight };
+      };
+      const blocks = [active.card && !compact.matches ? active.card : null, compact.matches ? null : panel]
+        .filter(Boolean).map(box);
+      const wr = wrap.getBoundingClientRect();
+      const ab = active.btn && active.btn.getBoundingClientRect();
+      const ax = ab ? (ab.left + ab.right) / 2 : NaN, ay = ab ? (ab.top + ab.bottom) / 2 : NaN;
       places.forEach((p) => {
         const l = p.label;
         if (!l) return;
-        l.classList.remove('is-left');
         const others = places.filter((q) => q !== p).map((q) => q.btn && q.btn.getBoundingClientRect())
           .filter(Boolean).map((r) => { const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2; return { left: cx - 8, right: cx + 8, top: cy - 8, bottom: cy + 8 }; });
-        const clear = (r) => !others.some((o) => hit(r, o, 4)) && !taken.some((t) => hit(r, t, 4)) && !(cardBox && hit(r, cardBox, 4));
-        let r = l.getBoundingClientRect();
-        if (!clear(r)) {
-          l.classList.add('is-left');
-          const left = l.getBoundingClientRect();
-          if (clear(left)) r = left; else l.classList.remove('is-left');
+        // Strafpunten: botsing met iets dichts 10, vizierlijn erdoor 1. Eerste hoek zonder punten wint.
+        const cost = (r) => 10 * ((r.left < wr.left || r.right > wr.right || r.top < wr.top ? 1 : 0)
+          + others.filter((o) => hit(r, o, 4)).length + taken.filter((t) => hit(r, t, 4)).length + blocks.filter((b) => hit(r, b, 4)).length)
+          + (r.left < ax && r.right > ax ? 1 : 0) + (r.top < ay && r.bottom > ay ? 1 : 0);
+        let best = null;
+        for (const c of CORNERS) {
+          l.classList.remove('is-left', 'is-up');
+          l.classList.add(...c);
+          const r = l.getBoundingClientRect(), k = cost(r);
+          if (!best || k < best.k) best = { c, r, k };
+          if (!k) break;
         }
-        taken.push(r);
+        l.classList.remove('is-left', 'is-up');
+        l.classList.add(...best.c);
+        taken.push(best.r);
       });
     }
     function layout() { layoutSvg(svg); placeMarkers(); placeCard(active); placeLabels(); }
@@ -259,6 +280,8 @@
     if ('ResizeObserver' in window) new ResizeObserver(layout).observe(wrap);
     else window.addEventListener('resize', layout);
     compact.addEventListener('change', layout);
+    // Na het laden van het lettertype is de adreskaart breder: opnieuw plaatsen (kaart en namen).
+    if (document.fonts) document.fonts.ready.then(layout);
 
     async function select(p) {
       if (busy) { queued = p; return; }
