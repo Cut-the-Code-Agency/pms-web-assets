@@ -155,6 +155,34 @@
     let waiting = false; // de laatste tone() stuitte op een foto die nog niet klaar is
     const born = performance.now();
     let candidates = null;
+    // Wat er op een meetpunt onder de balk ligt, bovenste eerst. Tijdens een paginaovergang (View Transitions) geeft
+    // elementsFromPoint alleen <html> terug (de browser toont dan beelden van de pagina); dan zoekt de balk het zelf
+    // op: elementen die het punt bedekken, de laatste in de pagina bovenaan (zoals bij de lagen met pointer-events:
+    // none hieronder, z-index buiten beschouwing). Zonder dit mat de balk na een overgang "licht" (de achtergrond
+    // van <html>) en kwam de goede toon pas ±2,5 s later.
+    let strip = null; // elementen die de middenlijn van de balk raken, per meting opnieuw
+    function stackAt(x, y) {
+      const s = document.elementsFromPoint(x, y);
+      if (s.length !== 1 || s[0] !== document.documentElement) return s;
+      if (!strip) {
+        strip = [];
+        for (const el of document.body.getElementsByTagName('*')) {
+          if (nav.contains(el)) continue;
+          const r = el.getBoundingClientRect();
+          if (!r.width || !r.height || r.top > y || r.bottom < y) continue;
+          const cs = getComputedStyle(el);
+          if (cs.pointerEvents === 'none' || cs.visibility === 'hidden') continue; // die komen via ghosts
+          strip.push([el, r]);
+        }
+      }
+      const out = [];
+      for (let i = strip.length - 1; i >= 0; i--) {
+        const r = strip[i][1];
+        if (r.left <= x && r.right >= x && r.top <= y && r.bottom >= y) out.push(strip[i][0]);
+      }
+      out.push(document.body, document.documentElement);
+      return out;
+    }
     // Alles met pointer-events: none dat iets tekent (foto, video, SVG-beeld, achtergrond). Eén keer bij laden en
     // na resize, niet per frame (getComputedStyle over de hele pagina).
     function scan() {
@@ -452,7 +480,7 @@
       for (let col = 0; col < cols; col++) {
         const left = r.left + r.width * col / cols, right = r.left + r.width * (col + 1) / cols, x = (left + right) / 2;
         const sy = y0 + h / 2;
-        const stack = document.elementsFromPoint(x, sy);
+        const stack = stackAt(x, sy);
         const hidden = ghosts.filter((g) => g.r.left <= x && g.r.right >= x && g.r.top <= sy && g.r.bottom >= sy);
         for (let row = 0; row < rows; row++) {
           const cell = { left, right, top: y0 + h * row / rows, bottom: y0 + h * (row + 1) / rows };
@@ -476,6 +504,7 @@
       const t0 = window.PMS_NAV_DEBUG && performance.now();
       opacityCache = new Map();
       rectCache = new Map();
+      strip = null;
       forcedCache = new Map();
       // Voorbij de balkhoogte gescrold: de head-CSS klapt de links in (en bovenaan weer uit).
       const scrolled = window.scrollY > bar.offsetHeight;
@@ -521,6 +550,9 @@
       settle = SETTLE.map((d) => setTimeout(request, d));
     }, { passive: true });
     window.addEventListener('resize', () => { candidates = null; request(); });
+    // Na een paginaovergang meteen opnieuw meten met de echte pagina
+    const vt = document.activeViewTransition || (window.pmsVT && window.pmsVT.transition);
+    if (vt && vt.finished) vt.finished.finally(() => { candidates = null; request(); });
     window.addEventListener('load', () => { candidates = null; request(); setTimeout(() => { candidates = null; request(); }, 2000); });
     // Een foto die onder de balk ligt en net geladen is (lazy): opnieuw meten.
     document.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') request(); }, true);
