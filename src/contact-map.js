@@ -141,6 +141,7 @@
     });
     let active = places.find((p) => p.card && p.card.classList.contains('is-active')) || places[0];
     let busy = false;
+    let queued = null; // klik tijdens het schuiven: na afloop alsnog uitvoeren
 
     // Klok
     if (time) { time.textContent = nlTime(); window.setInterval(() => { if (!document.hidden) time.textContent = nlTime(); }, 1000); }
@@ -194,7 +195,8 @@
     compact.addEventListener('change', layout);
 
     async function select(p) {
-      if (p === active || busy) return;
+      if (busy) { queued = p; return; }
+      if (p === active) return;
       busy = true;
       const from = active;
       const anim = canAnimate();
@@ -228,6 +230,9 @@
       if (anim && p.card) play(p.card, [{ transform: 'scale(0)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }],
         { duration: 450, easing: EASE });
       busy = false;
+      const next = queued;
+      queued = null;
+      if (next && next !== active) select(next);
     }
     places.forEach((p) => {
       if (!p.btn) return;

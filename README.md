@@ -144,8 +144,9 @@ In Webflow, page-footer van About us:
 <script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.33.0/dist/story-map.js" integrity="…" crossorigin="anonymous" defer></script>
 ```
 
-## Contact (v1.35.0)
+## Contact (v1.35.1)
 Page-footer van Contact, alle drie met SRI en `defer`:
 - `contact-map.js` — Contact Map: kaart bouwt op bij laden (lijnen, vierkantjes vanuit het midden, vizier, adreskaart), klik op een vierkantje schuift het vizier naar die vestiging en opent de adreskaart op een plek met ruimte; flare rond de muis zoals Story Map; klok (Nederlandse tijd) en coördinaten van de actieve vestiging. viewBox per breedte (`data-vb-desktop` / `data-vb-compact`).
 - `form-steps.js` — formulier in stappen (`.form_fieldset_wrap.is-step`, `[data-form-next]`, `[data-form-back]`, `[data-form-submit]`, teller `[data-form-step-current]`). Zonder script alle stappen onder elkaar.
 - `quote-slider.js` — Quote Slider: kop "Request a quote for <mineraal>", verborgen veld `input[data-quote-product]` en "View product" (`[data-quote-link] a`) volgen de slide in beeld (`data-name` / `data-slug` op `.mineral-slide_wrap`).
+- v1.35.1: klik op een vierkantje tijdens het schuiven wordt onthouden en daarna uitgevoerd; Quote Slider start vanuit `[data-quote-slider]` en haalt de 15 streepjes uit de tabvolgorde (pijlen en pijltoetsen blijven).

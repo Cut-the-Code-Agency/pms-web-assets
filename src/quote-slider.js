@@ -73,13 +73,18 @@
       if (swiper) {
         update(swiper);
         swiper.on('slideChange', () => update(swiper));
+        // 15 streepjes zijn 15 tabstops vóór "View product"; pijlen en pijltoetsen blijven de bediening.
+        const quiet = () => card.querySelectorAll('.slider_bullet_item').forEach((el) => el.setAttribute('tabindex', '-1'));
+        quiet();
+        swiper.on('paginationRender', quiet);
+        swiper.on('paginationUpdate', quiet);
         return;
       }
       if (tries++ < 100) window.setTimeout(wait, 100);
     })();
   }
 
-  function init() { document.querySelectorAll('.quote-slider_wrap').forEach(setup); }
+  function init() { document.querySelectorAll('[data-quote-slider]').forEach((card) => setup(card.closest('section') || card.parentElement)); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
