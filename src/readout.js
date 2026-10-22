@@ -8,6 +8,10 @@
 //                             SVG-<text>. data-readout="off" zet het uit.
 //   data-readout=".sm-coord"  op een wrapper: alleen de elementen erin die op die selector passen (tekst in
 //                             een embed, die je in Webflow geen attribuut kunt geven).
+//   [data-readout-hover]      bij hover (muis) of toetsenbordfocus: de tekst leest kort uit (0,45 s, de hover-in-tijd
+//                             van de site). Waarde = selector voor de teksten binnen het element (bv. ".nav_link,
+//                             .button_main_text" op het menu); leeg = het element zelf. Hoverzone per tekst: de
+//                             dichtstbijzijnde link of [data-trigger]-knop eromheen. Speelt niet opnieuw zolang hij loopt.
 //
 // - Speelt alleen bij de overgang onzichtbaar → zichtbaar terwijl het element in beeld is. Zo valt het samen
 //   met de bestaande inlaadanimatie, speelt het opnieuw als een slide weer actief wordt, en niet als een
@@ -28,6 +32,7 @@
   const LEAD = 0.3;    // deel van de tijd waarin alles rolt voordat het eerste teken vastvalt
   const STEP = 0.055;  // s tussen twee willekeurige tekens per plek
   const LATE = 3;      // s: naloop voor tekst die net buiten beeld verscheen
+  const HOVER = 0.45;  // s: uitlezen bij hover, gelijk aan de hover-in van de site
   const POOLS = [
     [/[A-Z]/, 'ABCDEFGHKNOPRSTUVXZ'],
     [/[a-z]/, 'abcdeghknopqrsuvxyz'],
@@ -158,7 +163,7 @@
 
     const items = new Map(); // el → { armed, inView, run }
 
-    const play = (el, item) => {
+    const play = (el, item, duration) => {
       if (inTransition(el)) return;
       const prep = el instanceof SVGElement ? prepareSvg(el) : prepareHtml(el);
       if (!prep) return;
@@ -168,7 +173,7 @@
         s.phase = Math.random() * STEP;
         s.tick = -1;
       });
-      const T = durationFor(n);
+      const T = duration || durationFor(n);
       const state = { p: 0 };
       const step = () => {
         if (!prep.alive()) { stop(false); return; }
@@ -263,6 +268,41 @@
     };
     scan();
     window.addEventListener('load', () => { scan(); setTimeout(scan, 1500); });
+
+    // Hover: menu- en footerlinks lezen uit als je eroverheen gaat (alleen met een muis) of er met de toetsenbord
+    // naartoe gaat. Delegatie op document, zodat ook links in een later geopend menupaneel meedoen.
+    const hovering = new WeakMap(); // tekst-element → item
+    const zoneOf = (t, box) => {
+      const z = t.closest('[data-trigger], a, button');
+      return z && box.contains(z) ? z : t;
+    };
+    const hoverTargets = (from) => {
+      const box = from.closest('[data-readout-hover]');
+      if (!box) return [];
+      const v = box.getAttribute('data-readout-hover').trim();
+      if (/^(off|false|0)$/i.test(v)) return [];
+      let list = [box];
+      if (v) try { list = [...box.querySelectorAll(v)]; } catch (e) { return []; }
+      return list.map((t) => ({ t, zone: zoneOf(t, box) }));
+    };
+    const hoverPlay = (t) => {
+      if (!shown(t)) return;
+      let item = hovering.get(t);
+      if (!item) hovering.set(t, (item = { run: null }));
+      if (item.run) return; // loopt nog: niet opnieuw beginnen
+      play(t, item, HOVER);
+    };
+    const canHover = window.matchMedia('(hover: hover)');
+    document.addEventListener('pointerover', (e) => {
+      if (e.pointerType === 'touch' || !canHover.matches || !(e.target instanceof Element)) return;
+      hoverTargets(e.target).forEach(({ t, zone }) => {
+        if (zone.contains(e.target) && !(e.relatedTarget instanceof Node && zone.contains(e.relatedTarget))) hoverPlay(t);
+      });
+    });
+    document.addEventListener('focusin', (e) => {
+      if (!(e.target instanceof Element) || !e.target.matches(':focus-visible')) return;
+      hoverTargets(e.target).forEach(({ t, zone }) => { if (zone.contains(e.target)) hoverPlay(t); });
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

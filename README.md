@@ -160,14 +160,16 @@ Site-footer: `form-errors.js` — verzendknoppen altijd klikbaar; bij versturen 
 
 Site settings › Custom code › Footer (site-breed). Taalvenster open/dicht, ingeklapte balk na scrollen, balkkleur per onderdeel uit wat eronder ligt (foto-pixels via een kleine canvaskopie, verlopen en halfdoorzichtige lagen tellen mee; video en een nog niet geladen foto = donker), en de ouderlink actief op detailpagina's. De CSS staat in de site-head. Vangnet op een sectie: `data-section="dark|light"` of `data-nav-color="Light|Dark"` (prop Nav Color). Meten: `window.PMS_NAV_DEBUG = 1` vóór het script zet `data-nav-luminance` op elk onderdeel en tijden in `window.PMS_NAV_TIMES`.
 
-## Readout (`readout.js`, vanaf v1.49.0; nu v1.55.0)
+## Readout (`readout.js`, vanaf v1.49.0; nu v1.57.0)
 
 Formules, kwaliteiten en coördinaten "lezen uit" als een meetapparaat: op het moment dat de tekst verschijnt (inlaadanimatie, slide wordt actief, kaart bouwt op) rollen letters en cijfers ±0,5–0,75 s door willekeurige tekens en vallen ze van links naar rechts op hun plek. Hoofdletter blijft hoofdletter, cijfer blijft cijfer; ₂, °, ′, spaties en leestekens blijven staan. Elk teken houdt tijdens het rollen de breedte van het echte teken (SVG-tekst: `textLength`), dus niets verschuift; daarna staat de oorspronkelijke tekst er weer. Schermlezers horen alleen de echte tekst. Zonder GSAP of met "minder beweging": niets, de echte tekst staat er. Gebruikt de GSAP die Webflow laadt.
 
 In Webflow site-breed (footer):
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.55.0/dist/readout.js" integrity="sha384-…" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/gh/Cut-the-Code-Agency/pms-web-assets@v1.57.0/dist/readout.js" integrity="sha384-…" crossorigin="anonymous"></script>
 ```
 
 Markup: `data-readout` op het element met de tekst (een wrapper mag: alle tekst erin doet mee) of op een SVG-`<text>`; `data-readout="off"` zet het uit. Met een selector als waarde op een wrapper (`data-readout=".sm-coord"` op `story-map_wrap`) doen alleen de elementen erin mee die erop passen: voor tekst in een embed. Speelt alleen bij onzichtbaar → zichtbaar terwijl het element in beeld is (of binnen 3 s nadat het vlak onder of boven de rand verscheen, binnen 60 % schermhoogte), dus samen met de bestaande inlaadanimatie en opnieuw bij een slidewissel; niet bij tekst die er al stond en niet bij wat meevliegt in de paginaovergang.
+
+Hover (vanaf v1.57.0): `data-readout-hover` op een element laat de tekst erin uitlezen bij hover (alleen met een muis) of toetsenbordfocus, in 0,45 s (de hover-in-tijd van de site). Waarde = selector voor de teksten binnen het element (`data-readout-hover=".nav_link, .button_main_text"` op het menu), leeg = het element zelf. De hoverzone per tekst is de dichtstbijzijnde link of `[data-trigger]`-knop eromheen. Speelt niet opnieuw zolang hij nog loopt; touch en "minder beweging": niets.
