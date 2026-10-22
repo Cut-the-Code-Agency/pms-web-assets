@@ -10,7 +10,7 @@
   const SCROLL_KEY = 'pms-vt-grid-scroll';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const supported = 'onpagereveal' in window && 'CSSViewTransitionRule' in window;
-  const P = (window.pmsVT = { version: '1.52.0' });
+  const P = (window.pmsVT = { version: '1.62.0' });
 
   // Adressen met en zonder taalvoorvoegsel (/minerals/x, /nl/minerals/x, /de/minerals/x), op elk domein
   const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/minerals(?:\/([a-z0-9-]+))?\/?$/;
@@ -62,7 +62,10 @@ html.vt-leaving :is(.minerals-grid_head, .minerals-grid_item:not(.is-vt-active),
 ::view-transition-new(vt-thumbs) { animation: none; }
 ::view-transition-old(vt-thumbs) { animation: vt-out 150ms var(--vt-exit) both; }
 ::view-transition-group(vt-nav) { animation: none; z-index: 100; }
-::view-transition-old(vt-nav), ::view-transition-new(vt-nav) { animation: none; }
+::view-transition-new(vt-nav) { animation: none; }
+/* Alleen de levende nieuwe nav: die begint in de stand van de oude en groeit/krimpt mee (navFrom hieronder); de oude
+   als beeld erbij gaf twee logo's (ingeklapt en vol) over elkaar */
+::view-transition-old(vt-nav) { animation: none; opacity: 0; }
 @keyframes vt-out { to { opacity: 0; } }
 @keyframes vt-up { from { opacity: 0; translate: 0 1.25rem; } }
 html.vt-returning .is-vt-active .card_mineral_content { animation: vt-up 750ms var(--vt-text) var(--vt-dur) both; }
@@ -293,7 +296,9 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     } else if (pageKind() === 'detail' && isGrid(url)) parts = detailParts();
     if (!parts) return;
 
-    const hand = { slug: parts.slug, at: Date.now(), clickAbs: P.clickAbs || 0, frame: rectOf(parts.frame), stone: null };
+    const nav = document.querySelector('[data-nav="component"]');
+    const hand = { slug: parts.slug, at: Date.now(), clickAbs: P.clickAbs || 0, frame: rectOf(parts.frame), stone: null,
+      navS: nav ? parseFloat(getComputedStyle(nav).getPropertyValue('--nav--scrolled')) || 0 : 0 };
     let stoneEl = null;
     if (parts.stone && parts.stone.naturalWidth) {
       const img = parts.stone;
@@ -348,6 +353,27 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     scrollTo(0, y);
   }
 
+  // Nav in de stand van de oude pagina laten beginnen (ingeklapt of vol, --nav--scrolled uit de head-CSS van de nav) en
+  // tijdens de vlucht naar de eigen stand laten groeien of krimpen: logo en balklinks bewegen zoals bij scrollen,
+  // in de duur van de vlucht. Eigen stand: zoals nav.js (scrollY voorbij de balkhoogte).
+  function navFrom(from, vt, dur) {
+    const nav = document.querySelector('[data-nav="component"]'), bar = nav && nav.querySelector('[data-nav="bar"]');
+    if (!nav || !bar) return;
+    const to = scrollY > bar.offsetHeight;
+    nav.toggleAttribute('data-nav-scrolled', to);
+    if (Math.abs(from - (to ? 1 : 0)) < 0.01) return;
+    nav.style.transition = 'none';
+    nav.style.setProperty('--nav--scrolled', from);
+    getComputedStyle(nav).getPropertyValue('--nav--scrolled');
+    const go = () => {
+      nav.style.transition = '';
+      nav.style.transitionDuration = dur + 'ms';
+      nav.style.removeProperty('--nav--scrolled');
+      setTimeout(() => { nav.style.transitionDuration = ''; }, dur + 100);
+    };
+    vt.ready.then(go, go);
+  }
+
   // ---------- Nieuwe pagina: vóór het eerste beeld ----------
   addEventListener('pagereveal', e => {
     padNumbers();
@@ -381,6 +407,7 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     const stoneEl = h.stone && parts.stone ? makeClone(parts.stone, h.stone.src, h.stone.aspect) : null;
     nameParts(parts, stoneEl);
     vt.ready.then(compositeFlight, () => {});
+    navFrom(h.navS || 0, vt, dur);
     if (pageKind() === 'detail') {
       html.classList.add('vt-arriving');
       holdIX3(performance.now() + dur * 0.45);
