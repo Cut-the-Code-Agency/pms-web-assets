@@ -1,6 +1,6 @@
 // Smooth scroll: na een draai aan het muiswiel loopt de pagina kort en zacht uit (Lenis), zoals op
-// woordvankracht.nl: zelfde afstand per wielstap en de uitloop die je daar op een 120 Hz-scherm ziet (0,42 s,
-// expo-out). Alleen met een muis of trackpad; op touch, met prefers-reduced-motion en in een iframe
+// woordvankracht.nl: zelfde afstand per wielstap (hun berekening met wheelDeltaY) en de uitloop die je daar
+// op een 120 Hz-scherm ziet (0,42 s, expo-out). Alleen met een muis of trackpad; op touch, met prefers-reduced-motion en in een iframe
 // (Designer-voorbeeld) blijft het gewone scrollen van de browser.
 //
 // - De browser scrolt zelf (Lenis zet elke frame de echte scrollpositie). Daardoor werken position: sticky
@@ -29,17 +29,32 @@ import Lenis from 'lenis';
   style.textContent = '.lenis [data-lenis-prevent]{overscroll-behavior:contain}.lenis.lenis-smooth iframe{pointer-events:none}';
   document.head.appendChild(style);
 
-  // Afstand per wielstap zoals woordvankracht.nl (hun Lenis uit 2023 rekent wheelDelta × 0,4 op een Mac en
-  // × 0,84 op Windows/Linux; in Chrome is wheelDelta 1,2 × deltaY). Gemeten daar: 100 px wiel → 48 px op een Mac.
+  // Afstand per wielstap precies zoals woordvankracht.nl: hun Lenis uit 2023 neemt niet deltaY maar de oudere
+  // wheelDeltaY van de browser, × 0,4 op een Mac en × 0,84 op Windows/Linux. Op een echte Mac (Chrome en Safari)
+  // is wheelDeltaY 3 × deltaY, dus daar gaat 100 px wiel naar 120 px; op Windows (120 per klik, deltaY 100) ±100 px.
+  // Zonder wheelDeltaY (oudere Firefox): deltaY × 1,2 op een Mac, × 1 elders, dezelfde uitkomst.
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
-  const wheelMultiplier = /win|linux/i.test(platform) ? 1 : 0.48;
+  const win = /win|linux/i.test(platform);
+  const factor = win ? 0.84 : 0.4;
+  const fallback = win ? 1 : 1.2;
+  const wheel = (data) => {
+    const e = data.event;
+    if (e.type !== 'wheel') return;
+    if (e.wheelDeltaY || e.wheelDeltaX) {
+      data.deltaX = -(e.wheelDeltaX || 0) * factor;
+      data.deltaY = -(e.wheelDeltaY || 0) * factor;
+    } else {
+      data.deltaX *= fallback;
+      data.deltaY *= fallback;
+    }
+  };
 
   // Uitloop: woordvankracht.nl zet duration 0,5 maar telt 10 ms per beeldje (raf(time += 10)), dus de echte
   // uitloop hangt af van het scherm: 0,83 s op 60 Hz, 0,42 s op 120 Hz (MacBook Pro). Hier vast 0,42 s, het
   // lichte gevoel van hun site op een 120 Hz-scherm, op elk scherm gelijk.
   const lenis = new Lenis({
     duration: 0.42, // 50 % na ±40 ms, 90 % na ±140 ms, stil na ±280 ms
-    wheelMultiplier,
+    virtualScroll: wheel,
     easing: (t) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
     autoRaf: true,
     allowNestedScroll: true,
