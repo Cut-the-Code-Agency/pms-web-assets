@@ -8,8 +8,9 @@
 //                             SVG-<text>. data-readout="off" zet het uit.
 //   data-readout=".sm-coord"  op een wrapper: alleen de elementen erin die op die selector passen (tekst in
 //                             een embed, die je in Webflow geen attribuut kunt geven).
-//   [data-readout-hover]      bij hover (muis) of toetsenbordfocus: de tekst leest rustig uit (0,55 s, een golf van
-//                             links naar rechts, tekens uit chemische formules: elementletters en ₂ ₃ ₄ ₆). Waarde = selector voor de teksten binnen het element (bv. ".nav_link,
+//   [data-readout-hover]      bij hover (muis) of toetsenbordfocus: de tekst leest rustig uit (0,6 s, de letters vallen
+//                             in willekeurige volgorde vast, tekens uit chemische formules: elementletters en ₂ ₃ ₄ ₆,
+//                             rollend in de accentkleur van het thema). Waarde = selector voor de teksten binnen het element (bv. ".nav_link,
 //                             .button_main_text" op het menu); leeg = het element zelf. Hoverzone per tekst: de
 //                             dichtstbijzijnde link of [data-trigger]-knop eromheen. Speelt niet opnieuw zolang hij loopt.
 //
@@ -32,13 +33,17 @@
   const LEAD = 0.3;    // deel van de tijd waarin alles rolt voordat het eerste teken vastvalt
   const STEP = 0.055;  // s tussen twee willekeurige tekens per plek
   const LATE = 3;      // s: naloop voor tekst die net buiten beeld verscheen
-  // Hover (menu, footer): rustiger dan het inladen. Een golf van links naar rechts waarin steeds maar een paar
-  // letters tegelijk rollen (wave = deel van de tijd dat één letter rolt), langzamer wisselend (step), en met tekens
-  // uit chemische formules: hoofdletters worden elementletters, kleine letters en cijfers subscript-cijfers.
+  // Hover (menu, footer): rustiger dan het inladen. Steeds maar een paar letters tegelijk rollen (wave = deel van de
+  // tijd dat één letter rolt), in willekeurige volgorde, langzamer wisselend (step), en met tekens uit chemische
+  // formules: hoofdletters worden elementletters, kleine letters en cijfers subscript-cijfers. Rollende tekens in de
+  // accentkleur van het thema en iets zachter; een vastgevallen letter krijgt zijn eigen kleur terug: een meting
+  // die vastzet.
   const HOVER = {
-    duration: 0.55,
+    duration: 0.6,
     step: 0.11,
-    wave: 0.3,
+    wave: 0.35,
+    random: true,
+    roll: 'color:var(--_theme---heading-accent,currentColor);opacity:.7',
     pools: [
       [/[A-Z]/, 'CHONSFKAM'],
       [/[a-z]/, '₂₃₄₆₂₃eilr'],
@@ -115,7 +120,8 @@
           s.textContent = c;
           word.append(s);
           const pool = poolOf(c);
-          if (pool) slots.push({ real: c, pool, set: (v) => { s.textContent = v; } });
+          const base = s.style.cssText;
+          if (pool) slots.push({ real: c, pool, set: (v, roll) => { s.textContent = v; s.style.cssText = roll ? base + ';' + roll : base; } });
           i++;
         }
         wrap.append(word);
@@ -182,10 +188,14 @@
       const n = prep.slots.length;
       const step = (opts && opts.step) || STEP;
       const wave = opts && opts.wave;
+      const roll = opts && opts.roll;
+      // Volgorde van vastvallen: van links naar rechts, of willekeurig (hover).
+      const rank = prep.slots.map((_, k) => k);
+      if (opts && opts.random) for (let i = n - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [rank[i], rank[j]] = [rank[j], rank[i]]; }
       prep.slots.forEach((s, k) => {
         if (wave) {
           // Golf: deze letter rolt alleen kort vóór zijn eigen vastvalmoment; ervoor staat de echte letter.
-          s.lock = wave + (1 - wave) * ((k + 1) / n);
+          s.lock = wave + (1 - wave) * ((rank[k] + 1) / n);
           s.from = s.lock - wave;
         } else {
           s.lock = LEAD + (1 - LEAD) * ((k + 1) / n); // van links naar rechts; de laatste precies aan het eind
@@ -204,7 +214,7 @@
           if (state.p >= s.lock) { if (s.tick !== 'done') { s.set(s.real); s.tick = 'done'; } return; }
           if (state.p < s.from) { if (s.tick !== 'wait') { s.set(s.real); s.tick = 'wait'; } return; }
           const tick = Math.floor((t + s.phase) / step);
-          if (tick !== s.tick) { s.tick = tick; s.set(pick(s.pool, s.real)); }
+          if (tick !== s.tick) { s.tick = tick; s.set(pick(s.pool, s.real), roll); }
         });
         if (prep.flush) prep.flush();
       };
