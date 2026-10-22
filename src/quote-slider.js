@@ -75,9 +75,11 @@
       if (!formTitle) return;
       if (reduce.matches || !('animate' in formTitle) || !formTitle.textContent.trim()) { formTitle.replaceChildren(...formTitleContent(name)); return; }
       const me = ++formRun;
-      await formTitle.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, easing: OUT, fill: 'forwards' }).finished.catch(() => {});
+      const out = formTitle.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, easing: OUT, fill: 'forwards' });
+      await out.finished.catch(() => {});
       if (me !== formRun) return;
       formTitle.replaceChildren(...formTitleContent(name));
+      out.cancel(); // anders blijft de vulling (opacity 0) van de uitfade staan na de infade
       formTitle.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' });
     }
 
