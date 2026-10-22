@@ -8,8 +8,8 @@
 //                             SVG-<text>. data-readout="off" zet het uit.
 //   data-readout=".sm-coord"  op een wrapper: alleen de elementen erin die op die selector passen (tekst in
 //                             een embed, die je in Webflow geen attribuut kunt geven).
-//   [data-readout-hover]      bij hover (muis) of toetsenbordfocus: de tekst leest kort uit (0,45 s, de hover-in-tijd
-//                             van de site). Waarde = selector voor de teksten binnen het element (bv. ".nav_link,
+//   [data-readout-hover]      bij hover (muis) of toetsenbordfocus: de tekst leest rustig uit (0,55 s, een golf van
+//                             links naar rechts, tekens uit chemische formules: elementletters en ₂ ₃ ₄ ₆). Waarde = selector voor de teksten binnen het element (bv. ".nav_link,
 //                             .button_main_text" op het menu); leeg = het element zelf. Hoverzone per tekst: de
 //                             dichtstbijzijnde link of [data-trigger]-knop eromheen. Speelt niet opnieuw zolang hij loopt.
 //
@@ -32,7 +32,19 @@
   const LEAD = 0.3;    // deel van de tijd waarin alles rolt voordat het eerste teken vastvalt
   const STEP = 0.055;  // s tussen twee willekeurige tekens per plek
   const LATE = 3;      // s: naloop voor tekst die net buiten beeld verscheen
-  const HOVER = 0.45;  // s: uitlezen bij hover, gelijk aan de hover-in van de site
+  // Hover (menu, footer): rustiger dan het inladen. Een golf van links naar rechts waarin steeds maar een paar
+  // letters tegelijk rollen (wave = deel van de tijd dat één letter rolt), langzamer wisselend (step), en met tekens
+  // uit chemische formules: hoofdletters worden elementletters, kleine letters en cijfers subscript-cijfers.
+  const HOVER = {
+    duration: 0.55,
+    step: 0.11,
+    wave: 0.3,
+    pools: [
+      [/[A-Z]/, 'CHONSFKAM'],
+      [/[a-z]/, '₂₃₄₆₂₃eilr'],
+      [/[0-9]/, '₂₃₄₆'],
+    ],
+  };
   const POOLS = [
     [/[A-Z]/, 'ABCDEFGHKNOPRSTUVXZ'],
     [/[a-z]/, 'abcdeghknopqrsuvxyz'],
@@ -163,24 +175,35 @@
 
     const items = new Map(); // el → { armed, inView, run }
 
-    const play = (el, item, duration) => {
+    const play = (el, item, opts) => {
       if (inTransition(el)) return;
       const prep = el instanceof SVGElement ? prepareSvg(el) : prepareHtml(el);
       if (!prep) return;
       const n = prep.slots.length;
+      const step = (opts && opts.step) || STEP;
+      const wave = opts && opts.wave;
       prep.slots.forEach((s, k) => {
-        s.lock = LEAD + (1 - LEAD) * ((k + 1) / n); // van links naar rechts; de laatste precies aan het eind
-        s.phase = Math.random() * STEP;
+        if (wave) {
+          // Golf: deze letter rolt alleen kort vóór zijn eigen vastvalmoment; ervoor staat de echte letter.
+          s.lock = wave + (1 - wave) * ((k + 1) / n);
+          s.from = s.lock - wave;
+        } else {
+          s.lock = LEAD + (1 - LEAD) * ((k + 1) / n); // van links naar rechts; de laatste precies aan het eind
+          s.from = 0;
+        }
+        if (opts && opts.pools) { for (const [re, pool] of opts.pools) if (re.test(s.real)) { s.pool = pool; break; } }
+        s.phase = Math.random() * step;
         s.tick = -1;
       });
-      const T = duration || durationFor(n);
+      const T = (opts && opts.duration) || durationFor(n);
       const state = { p: 0 };
-      const step = () => {
+      const frame = () => {
         if (!prep.alive()) { stop(false); return; }
         const t = state.p * T;
         prep.slots.forEach((s) => {
-          if (state.p >= s.lock) { if (s.tick !== -2) { s.set(s.real); s.tick = -2; } return; }
-          const tick = Math.floor((t + s.phase) / STEP);
+          if (state.p >= s.lock) { if (s.tick !== 'done') { s.set(s.real); s.tick = 'done'; } return; }
+          if (state.p < s.from) { if (s.tick !== 'wait') { s.set(s.real); s.tick = 'wait'; } return; }
+          const tick = Math.floor((t + s.phase) / step);
           if (tick !== s.tick) { s.tick = tick; s.set(pick(s.pool, s.real)); }
         });
         if (prep.flush) prep.flush();
@@ -191,8 +214,8 @@
         item.run = null;
         if (!done) item.armed = false;
       };
-      const tween = gsap.to(state, { p: 1, duration: T, ease: 'none', onUpdate: step, onComplete: () => stop(true) });
-      step();
+      const tween = gsap.to(state, { p: 1, duration: T, ease: 'none', onUpdate: frame, onComplete: () => stop(true) });
+      frame();
       item.run = { stop };
     };
 
