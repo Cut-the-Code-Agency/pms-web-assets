@@ -268,6 +268,7 @@
   // SVG-attribuut transform (de animaties gebruiken alleen opacity op deze elementen).
   // Hoekteksten (tijd, coördinaten) hebben een vaste maat in schermpixels (0,75rem) en staan even ver
   // van de kaderlijn van Story Slides naar de zijkant als naar onder (1rem vanaf de binnenkant van de lijn).
+  // Telefoon (≤ 767): opzij gelijk met de tekst van de dia (feedback 2026-10-22), onder 1rem van de lijn.
   const META_SIZE = 0.75; // rem
   const META_GAP = 1;     // rem
   function pin(svg) {
@@ -275,6 +276,9 @@
     const els = [...svg.querySelectorAll('[data-pin]')];
     const frame = svg.closest('.story-slides_wrap')?.querySelector('.story-slides_frame');
     const line = frame?.querySelector('.story-slides_line');
+    const contain = svg.closest('.story-slide_wrap')?.querySelector('.story-slide_contain');
+    const phone = window.matchMedia('(max-width: 767px)');
+    phone.addEventListener('change', () => layout());
     function layout() {
       const r = svg.getBoundingClientRect();
       if (!r.width || !r.height) return;
@@ -284,11 +288,18 @@
       // binnenkant van de kaderlijn, gemeten vanaf de rand van de dia (padding van het kader + lijndikte)
       const inset = frame ? (parseFloat(getComputedStyle(frame).paddingLeft) || 0) + (line ? parseFloat(getComputedStyle(line).borderLeftWidth) || 0 : 0) : 0;
       const edge = (inset + META_GAP * rem) / s; // in kaarteenheden
+      // Telefoon: links en rechts gelijk met de tekst van de dia (inhoud van de container), niet 1rem van de lijn.
+      let edgeL = edge, edgeR = edge;
+      if (phone.matches && contain) {
+        const c = contain.getBoundingClientRect(), cs = getComputedStyle(contain);
+        edgeL = (c.left + (parseFloat(cs.paddingLeft) || 0) - r.left) / s;
+        edgeR = (r.right - c.right + (parseFloat(cs.paddingRight) || 0)) / s;
+      }
       els.forEach((el) => {
         const p = el.dataset.pin;
         if (p === 'bl' || p === 'br') {
           el.setAttribute('font-size', (META_SIZE * rem / s).toFixed(2));
-          el.setAttribute('x', (p === 'bl' ? x0 + edge : vw - x0 - edge).toFixed(1));
+          el.setAttribute('x', (p === 'bl' ? x0 + edgeL : vw - x0 - edgeR).toFixed(1));
           el.setAttribute('y', (vh - y0 - edge).toFixed(1)); // basislijn: cijfers en hoofdletters staan erop
           el.setAttribute('text-anchor', p === 'bl' ? 'start' : 'end');
           el.removeAttribute('transform');
