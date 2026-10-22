@@ -1,7 +1,7 @@
 // Smooth scroll: na een draai aan het muiswiel loopt de pagina kort en zacht uit (Lenis), zoals op
-// woordvankracht.nl: zelfde afstand per wielstap en zelfde uitloop (0,8 s, expo-out). Alleen met een muis
-// of trackpad; op touch, met prefers-reduced-motion en in een iframe (Designer-voorbeeld) blijft het gewone
-// scrollen van de browser.
+// woordvankracht.nl: zelfde afstand per wielstap en de uitloop die je daar op een 120 Hz-scherm ziet (0,42 s,
+// expo-out). Alleen met een muis of trackpad; op touch, met prefers-reduced-motion en in een iframe
+// (Designer-voorbeeld) blijft het gewone scrollen van de browser.
 //
 // - De browser scrolt zelf (Lenis zet elke frame de echte scrollpositie). Daardoor werken position: sticky
 //   (Story Slides), de IX3-scrolltriggers, nav.js, de paginaovergang en het terugzetten van de scrollplek
@@ -34,8 +34,11 @@ import Lenis from 'lenis';
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
   const wheelMultiplier = /win|linux/i.test(platform) ? 1 : 0.48;
 
+  // Uitloop: woordvankracht.nl zet duration 0,5 maar telt 10 ms per beeldje (raf(time += 10)), dus de echte
+  // uitloop hangt af van het scherm: 0,83 s op 60 Hz, 0,42 s op 120 Hz (MacBook Pro). Hier vast 0,42 s, het
+  // lichte gevoel van hun site op een 120 Hz-scherm, op elk scherm gelijk.
   const lenis = new Lenis({
-    duration: 0.8, // gemeten op woordvankracht.nl: 50 % na ±70 ms, 90 % na ±280 ms, stil na ±530 ms
+    duration: 0.42, // 50 % na ±40 ms, 90 % na ±140 ms, stil na ±280 ms
     wheelMultiplier,
     easing: (t) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
     autoRaf: true,
