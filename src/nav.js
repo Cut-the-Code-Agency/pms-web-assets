@@ -48,7 +48,30 @@
     regionDropdown(nav);
     languageLinks(nav);
     activeParent(nav);
+    document.querySelectorAll('.footer_links').forEach(activeParent);
+    logoOverFooter(nav);
     barColour(nav);
+  }
+
+  // Onderaan de pagina schuift het footerlogo onder het navlogo door (mobiel: de footer is hoger dan het
+  // scherm). Zolang het footerlogo in de band van het navlogo ligt, vervaagt het navlogo (head-CSS,
+  // data-nav-logo-hidden); met open menu blijft het staan (CSS).
+  function logoOverFooter(nav) {
+    const logo = nav.querySelector('[data-nav="logo"]');
+    const target = document.querySelector('.footer_logo_wrap');
+    if (!logo || !target || !('IntersectionObserver' in window)) return;
+    let io;
+    function watch() {
+      if (io) io.disconnect();
+      const band = Math.ceil(logo.getBoundingClientRect().bottom) + 8;
+      if (!(band > 0) || !(innerHeight > band)) return;
+      io = new IntersectionObserver((entries) => {
+        logo.toggleAttribute('data-nav-logo-hidden', entries[entries.length - 1].isIntersecting);
+      }, { rootMargin: `0px 0px ${band - innerHeight}px 0px`, threshold: 0 });
+      io.observe(target);
+    }
+    watch();
+    window.addEventListener('resize', watch);
   }
 
   // Taalvenster. Webflow's navbar sluit het menu bij elke klik buiten het paneel, en Popovers staan niet aan
@@ -128,7 +151,7 @@
 
   // Webflow markeert alleen de link naar de pagina zelf (w--current, aria-current="page"). Op een detailpagina
   // (/minerals/zircon) wordt de ouderlink (/minerals) actief: data-nav-current (de head-CSS kijkt naar beide) en
-  // aria-current="true". Niet w--current zelf: webflow.js haalt die bij het starten weer weg.
+  // aria-current="true". Geldt voor de balk, het paneel en de paginalinks in de footer (.footer_links). Niet w--current zelf: webflow.js haalt die bij het starten weer weg.
   function activeParent(nav) {
     const path = location.pathname.replace(/\/+$/, '');
     nav.querySelectorAll('a[href^="/"]').forEach((a) => {

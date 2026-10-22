@@ -2,7 +2,10 @@
 // Markup (Webflow-component Quote Slider):
 //   [data-quote-title="Request a quote for"]   kop; wordt "Request a quote for <mineraal>". Vanaf 992 px staat
 //                                               de naam op een eigen regel en is de kop zo hoog als de hoogste
-//                                               naam (formulier verspringt niet); ≤ 991 zoals voorheen.
+//                                               naam (formulier verspringt niet); ≤ 991 groeit of krimpt de kop
+//                                               zacht mee met de naam (300 ms), de kaart schuift mee.
+//   [data-quote-form-title="Request a quote for"] kleine herhaling boven het formulier (≤ 991): prefix + naam in
+//                                               een span.quote-slider_form_name; wisselt met een korte fade.
 //   [data-quote-slider]                         kaart met de Lumos Slider (Swiper) en Mineral Slides
 //     .mineral-slide_wrap[data-name][data-slug] één mineraal (Name / Slug uit het CMS)
 //     [data-quote-link] a                       "View product" → /minerals/<slug>
@@ -30,6 +33,7 @@
     const title = section.querySelector('[data-quote-title]');
     const input = section.querySelector('input[data-quote-product]');
     const link = section.querySelector('[data-quote-link] a');
+    const formTitle = section.querySelector('[data-quote-form-title]');
     const swiperEl = card && card.querySelector('.swiper');
     if (!card || !swiperEl) return;
     const prefix = title ? title.getAttribute('data-quote-title') || 'Request a quote for' : '';
@@ -45,8 +49,10 @@
         link.setAttribute('href', slug ? `/minerals/${slug}` : '/minerals');
         if (name) link.setAttribute('aria-label', `View product: ${name}`);
       }
-      if (!title || !name || name === last) return;
+      if (!name || name === last) return;
       last = name;
+      setFormTitle(name);
+      if (!title) return;
       if (reduce.matches || !('animate' in title)) { title.replaceChildren(...head(prefix, name)); return; }
       swap(name);
     }
@@ -56,6 +62,41 @@
     // "Request a quote for" blijft staan. Schermlezers lezen de naam uit een sr-only kopie.
     const IN = 'cubic-bezier(0.75, 0, 0.5, 1)', OUT = 'cubic-bezier(0.5, 0, 0.75, 1)';
     let run = 0;
+
+    // Kleine herhaling boven het formulier (≤ 991 zichtbaar, CSS): "Request a quote for <naam>".
+    function formTitleContent(name) {
+      const span = document.createElement('span');
+      span.className = 'quote-slider_form_name';
+      span.textContent = name;
+      return [`${formTitle.getAttribute('data-quote-form-title') || prefix || 'Request a quote for'} `, span];
+    }
+    let formRun = 0;
+    async function setFormTitle(name) {
+      if (!formTitle) return;
+      if (reduce.matches || !('animate' in formTitle) || !formTitle.textContent.trim()) { formTitle.replaceChildren(...formTitleContent(name)); return; }
+      const me = ++formRun;
+      await formTitle.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, easing: OUT, fill: 'forwards' }).finished.catch(() => {});
+      if (me !== formRun) return;
+      formTitle.replaceChildren(...formTitleContent(name));
+      formTitle.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' });
+    }
+
+    // ≤ 991: de kop is zo hoog als de naam; bij een wissel loopt de hoogte in 300 ms naar de nieuwe stand
+    // (zelfde duur als de letters die weggaan), zodat de kaart eronder niet springt maar meeschuift.
+    function growTo(from) {
+      if (wide.matches || reduce.matches) return;
+      title.style.height = '';
+      const to = title.offsetHeight;
+      if (Math.abs(to - from) < 1) return;
+      title.style.height = `${from}px`;
+      title.style.overflow = 'hidden';
+      void title.offsetHeight;
+      title.style.transition = `height 300ms ${OUT}`;
+      title.style.height = `${to}px`;
+      const done = (e) => { if (e && e.target !== title) return; title.style.height = ''; title.style.overflow = ''; title.style.transition = ''; title.removeEventListener('transitionend', done); };
+      title.addEventListener('transitionend', done);
+      setTimeout(done, 400);
+    }
     function letters(name) {
       const wrap = document.createElement('span');
       wrap.setAttribute('aria-hidden', 'true');
@@ -90,7 +131,9 @@
       sr.textContent = name;
       const vis = letters(name);
       vis.setAttribute('data-quote-name', '');
+      const before = title.offsetHeight;
       title.replaceChildren(...head(prefix, sr, vis));
+      growTo(before);
       [...vis.querySelectorAll('[data-quote-char]')].forEach((c, i) => c.animate([{ transform: 'translateY(110%)' }, { transform: 'translateY(0)' }],
         { duration: 750, delay: i * 25, easing: IN, fill: 'backwards' }));
     }
@@ -101,6 +144,7 @@
     const firstName = nameOf(first);
     if (firstName) {
       if (title) title.replaceChildren(...head(prefix, firstName));
+      if (formTitle) formTitle.replaceChildren(...formTitleContent(firstName));
       if (input) input.value = firstName;
       const slug = first.getAttribute('data-slug');
       if (link && slug) link.setAttribute('href', `/minerals/${slug}`);

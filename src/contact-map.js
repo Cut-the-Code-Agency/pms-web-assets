@@ -14,7 +14,8 @@
 // vanaf zijn huidige plek verder schuift, en IX3 kent geen lichtvlek die de muis volgt.
 //
 // Markup (binnen .contact-map_wrap):
-//   svg[data-contact-map]                 data-vb-desktop / data-vb-compact (≤ 991 px) / data-vb-band (rem)
+//   svg[data-contact-map]                 data-vb-desktop / data-vb-compact (≤ 991 px) / data-vb-band (rem, terugval:
+//                                         de band volgt de padding-top van .contact-map_contain + 0.5rem)
 //     .cm-v / .cm-h  rasterlijnen
 //     .cm-square[data-cm-place=key][data-lat][data-lon]      .cm-target  vizier (translate in kaarteenheden)
 //   button.contact-map_marker[data-place=key] › .contact-map_marker_label (naam; + is-active / is-hover,
@@ -91,7 +92,12 @@
     const r = svg.getBoundingClientRect();
     if (vb && compact.matches && r.width && r.height) {
       const [x, y, w, h] = vb.split(/\s+/).map(Number);
-      const band = (parseFloat(svg.dataset.vbBand) || 0) * parseFloat(getComputedStyle(document.documentElement).fontSize) || r.height;
+      // Bandhoogte = de ruimte boven de adreskaart (padding-top van contact-map_contain, + de 0.5rem waarmee de
+      // kaart over de foto valt), zodat de band meekrimpt op een laag scherm; data-vb-band (rem) is de terugval.
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const contain = svg.closest('.contact-map_wrap') && svg.closest('.contact-map_wrap').querySelector('.contact-map_contain');
+      const pad = contain ? parseFloat(getComputedStyle(contain).paddingTop) : 0;
+      const band = (pad > 0 ? pad + 0.5 * rem : (parseFloat(svg.dataset.vbBand) || 0) * rem) || r.height;
       const s = Math.min(r.width / w, Math.min(band, r.height) / h);
       const vw = r.width / s, vh = r.height / s;
       vb = `${(x + w / 2 - vw / 2).toFixed(1)} ${y} ${vw.toFixed(1)} ${vh.toFixed(1)}`;
