@@ -10,7 +10,7 @@
   const SCROLL_KEY = 'pms-vt-grid-scroll';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const supported = 'onpagereveal' in window && 'CSSViewTransitionRule' in window;
-  const P = (window.pmsVT = { version: '1.62.0' });
+  const P = (window.pmsVT = { version: '1.64.0' });
 
   // Adressen met en zonder taalvoorvoegsel (/minerals/x, /nl/minerals/x, /de/minerals/x), op elk domein
   const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/minerals(?:\/([a-z0-9-]+))?\/?$/;
@@ -476,7 +476,11 @@ html.pms-calm-vt::view-transition-group(pms-marker) { z-index: 3; animation-dura
 html.pms-calm-vt::view-transition-old(pms-marker), html.pms-calm-vt::view-transition-new(pms-marker) { animation: none; }
 html.pms-calm-vt::view-transition-old(pms-marker):only-child { animation: pms-calm-out ${FADE}ms ${OPACITY} both; }
 html.pms-calm-vt::view-transition-new(pms-marker):only-child { animation: pms-calm-in ${FADE}ms ${OPACITY} ${NEW_DELAY}ms both; }
-html.pms-calm-vt [data-nav="links"] .nav_link::before { visibility: hidden; }
+html.pms-calm-vt:not(.pms-calm-grow) [data-nav="links"] .nav_link::before { visibility: hidden; }
+/* Nav groeit/krimpt mee (navGrow): alleen de levende nieuwe nav, die begint in de stand van de oude; het blokje schuift
+   met zijn link mee in plaats van als eigen laag te glijden */
+html.pms-calm-vt.pms-calm-grow::view-transition-old(pms-nav) { animation: none; opacity: 0; }
+html.pms-calm-vt.pms-calm-grow::view-transition-new(pms-nav) { animation: none; }
 /* Vanuit het open menu: de nieuwe pagina staat meteen onder het paneel, het paneel schuift omhoog weg zoals bij sluiten */
 html.pms-calm-menu::view-transition-old(root) { animation: none; opacity: 0; }
 html.pms-calm-menu::view-transition-new(root) { animation: none; }
@@ -538,7 +542,34 @@ html.pms-calm-menu::view-transition-old(pms-menu) { animation: pms-calm-menu-up 
     for (const el of named) el.style.viewTransitionName = '';
     named = [];
     if (marker) { marker.remove(); marker = null; }
-    html.classList.remove('pms-calm-vt', 'pms-calm-menu');
+    html.classList.remove('pms-calm-vt', 'pms-calm-menu', 'pms-calm-grow');
+  }
+
+  // Zichtbare stand van de balk: ingeklapt (--nav--scrolled, head-CSS van de nav) tenzij de muis erop staat (--nav--hover)
+  function navState(nav) {
+    const bar = nav && nav.querySelector('[data-nav="bar"]');
+    if (!nav || !bar) return { s: 0, bar };
+    const v = (el, p) => parseFloat(getComputedStyle(el).getPropertyValue(p)) || 0;
+    return { s: v(nav, '--nav--scrolled') * (1 - v(bar, '--nav--hover')), bar };
+  }
+  // Nav in de stand van de oude pagina laten beginnen en naar de eigen stand laten groeien of krimpen (zoals bij
+  // scrollen: 750 ms, curves van de nav-CSS), met de toon van de oude pagina als begin, zodat nav.js de kleur zacht
+  // laat overgaan. Eigen stand: zoals nav.js (scroll voorbij de balkhoogte). Zelfde aanpak als de kaartovergang.
+  function navGrow(from, tones, vt) {
+    const nav = navEl(), { bar } = navState(nav);
+    if (!bar) return false;
+    const to = scrollY > bar.offsetHeight;
+    nav.toggleAttribute('data-nav-scrolled', to);
+    if (Math.abs(from - (to ? 1 : 0)) < 0.01) return false;
+    for (const k in tones || {}) nav.querySelectorAll(`[data-nav="${k}"]`).forEach(el => el.setAttribute('data-nav-tone', tones[k]));
+    nav.style.transition = 'none';
+    nav.style.setProperty('--nav--scrolled', from);
+    getComputedStyle(nav).getPropertyValue('--nav--scrolled');
+    // nav.js meet bij scroll opnieuw: dan krijgt de balk zijn eigen toon (zacht, 300 ms), ook terug uit het geheugen van de
+    // browser, waar nav.js nog de oude stand van deze pagina kent en anders niets zou bijwerken
+    const go = () => { nav.style.transition = ''; nav.style.removeProperty('--nav--scrolled'); dispatchEvent(new Event('scroll')); };
+    vt.ready.then(go, go);
+    return true;
   }
 
   // ---------- Klik op een link in het open menu ----------
@@ -569,8 +600,13 @@ html.pms-calm-menu::view-transition-old(pms-menu) { animation: pms-calm-menu-up 
     if (!e.viewTransition || !to || e.activation.navigationType === 'reload') return;
     const calm = !byCard(location.href, to);
     const menu = calm && menuOpen();
-    const m = calm && !menu ? markerRect() : null; // open menu: de balklinks zijn weg, het blokje komt gewoon op
-    sessionStorage.setItem(KEY, JSON.stringify({ from: location.href, at: Date.now(), calm, menu, marker: m }));
+    const nav = navEl(), st = navState(nav);
+    // Open menu: de balklinks zijn weg, het blokje komt gewoon op. Ingeklapte nav: de links (en het blokje) staan
+    // onzichtbaar achter Contact, dus geen blokje om vandaan te glijden
+    const m = calm && !menu && st.s < 0.5 ? markerRect() : null;
+    const tones = {};
+    if (nav) nav.querySelectorAll('[data-nav][data-nav-tone]').forEach(el => { tones[el.dataset.nav] = el.dataset.navTone; });
+    sessionStorage.setItem(KEY, JSON.stringify({ from: location.href, at: Date.now(), calm, menu, marker: m, navS: st.s, tones }));
     if (!calm) return;
     setup(m, menu ? menuPanel() : null);
     e.viewTransition.finished.finally(cleanup);
@@ -598,10 +634,13 @@ html.pms-calm-menu::view-transition-old(pms-menu) { animation: pms-calm-menu-up 
     if (!vt || !d.calm || Date.now() - d.at > 10000 || (d.from && byCard(d.from, location.href))) { C.last = null; return; }
     // Blokje: pas na de opbouw van de nav staat de actieve link op zijn plek (lettertype, nav.js); meten vlak voor het
     // vastleggen van de nieuwe stand
-    const m = markerRect();
+    // Terug uit het geheugen van de browser heeft de balk zijn eigen toon nog; anders beginnen met die van de oude pagina
+    const grow = !d.menu && navGrow(d.navS || 0, e.persisted ? null : d.tones, vt);
+    const m = grow ? null : markerRect();
     const dist = m && d.marker ? Math.hypot(m.left - d.marker.left, m.top - d.marker.top) : 0;
     html.style.setProperty('--pms-calm-move', Math.min(1100, Math.max(750, dist * 1.875)) * k + 'ms'); // motion.md
     setup(m);
+    if (grow) html.classList.add('pms-calm-grow');
     if (d.menu) html.classList.add('pms-calm-menu');
     holdIX3(performance.now() + (d.menu ? MENU * 0.4 : NEW_DELAY));
     // Een klein boogje over de woorden: recht vooruit liep het blokje door de bovenkant van de letters
