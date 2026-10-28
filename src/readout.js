@@ -13,6 +13,10 @@
 //                             rollend in de accentkleur van het thema). Waarde = selector voor de teksten binnen het element (bv. ".nav_link,
 //                             .button_main_text" op het menu); leeg = het element zelf. Hoverzone per tekst: de
 //                             dichtstbijzijnde link of [data-trigger]-knop eromheen. Speelt niet opnieuw zolang hij loopt.
+//   data-readout-hover-mode="load"  op hetzelfde element: bij hover hetzelfde uitlezen als bij inladen (alle letters
+//                             rollen, gewone tekens, van links naar rechts, ± 0,5 s) in plaats van de rustige menustand.
+//                             Voor Card Mineral: de formule leest bij hover uit zoals bij het inladen van de kaart.
+//                             Een klik (naar de productpagina) zet de tekst meteen terug, zodat wat meevliegt klopt.
 //
 // - Speelt alleen bij de overgang onzichtbaar → zichtbaar terwijl het element in beeld is. Zo valt het samen
 //   met de bestaande inlaadanimatie, speelt het opnieuw als een slide weer actief wordt, en niet als een
@@ -180,6 +184,8 @@
     if (!gsap || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     const items = new Map(); // el → { armed, inView, run }
+    const hovering = new WeakMap(); // tekst-element → item (hover)
+    const hoverRuns = new Set(); // hover-items die nu lopen
 
     const play = (el, item, opts) => {
       if (inTransition(el)) return;
@@ -245,6 +251,9 @@
           item.late = 0;
         } else if (item.armed && !item.run) {
           item.armed = false;
+          // Liep er nog een hover-uitlezing op deze tekst: eerst terugzetten, dan pas opnieuw opbouwen.
+          const h = hovering.get(el);
+          if (h && h.run) h.run.stop(true);
           play(el, item);
         } else if (item.late) {
           if (now < item.late) play(el, item);
@@ -304,7 +313,6 @@
 
     // Hover: menu- en footerlinks lezen uit als je eroverheen gaat (alleen met een muis) of er met de toetsenbord
     // naartoe gaat. Delegatie op document, zodat ook links in een later geopend menupaneel meedoen.
-    const hovering = new WeakMap(); // tekst-element → item
     const zoneOf = (t, box) => {
       const z = t.closest('[data-trigger], a, button');
       return z && box.contains(z) ? z : t;
@@ -316,25 +324,35 @@
       if (/^(off|false|0)$/i.test(v)) return [];
       let list = [box];
       if (v) try { list = [...box.querySelectorAll(v)]; } catch (e) { return []; }
-      return list.map((t) => ({ t, zone: zoneOf(t, box) }));
+      const opts = box.getAttribute('data-readout-hover-mode') === 'load' ? null : HOVER;
+      return list.map((t) => ({ t, zone: zoneOf(t, box), opts }));
     };
-    const hoverPlay = (t) => {
+    const hoverPlay = (t, opts) => {
       if (!shown(t)) return;
+      const load = items.get(t);
+      if (load && load.run) return; // leest nog uit van het inladen
       let item = hovering.get(t);
       if (!item) hovering.set(t, (item = { run: null }));
       if (item.run) return; // loopt nog: niet opnieuw beginnen
-      play(t, item, HOVER);
+      play(t, item, opts);
+      if (item.run && !opts) hoverRuns.add(item); // alleen de kaartstand; menulinks lopen gewoon uit
     };
+    // Klik (bv. kaart → productpagina) of de pagina gaat weg: lopende hover-uitlezingen meteen terug naar de echte
+    // tekst, zodat de paginaovergang geen half gerolde formule meeneemt.
+    const stopHover = () => { hoverRuns.forEach((item) => { if (item.run) item.run.stop(true); }); hoverRuns.clear(); };
+    document.addEventListener('click', stopHover, true);
+    addEventListener('pageswap', stopHover);
+    addEventListener('pagehide', stopHover);
     const canHover = window.matchMedia('(hover: hover)');
     document.addEventListener('pointerover', (e) => {
       if (e.pointerType === 'touch' || !canHover.matches || !(e.target instanceof Element)) return;
-      hoverTargets(e.target).forEach(({ t, zone }) => {
-        if (zone.contains(e.target) && !(e.relatedTarget instanceof Node && zone.contains(e.relatedTarget))) hoverPlay(t);
+      hoverTargets(e.target).forEach(({ t, zone, opts }) => {
+        if (zone.contains(e.target) && !(e.relatedTarget instanceof Node && zone.contains(e.relatedTarget))) hoverPlay(t, opts);
       });
     });
     document.addEventListener('focusin', (e) => {
       if (!(e.target instanceof Element) || !e.target.matches(':focus-visible')) return;
-      hoverTargets(e.target).forEach(({ t, zone }) => { if (zone.contains(e.target)) hoverPlay(t); });
+      hoverTargets(e.target).forEach(({ t, zone, opts }) => { if (zone.contains(e.target)) hoverPlay(t, opts); });
     });
   }
 
