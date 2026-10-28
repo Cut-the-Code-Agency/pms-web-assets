@@ -21,7 +21,8 @@
 // in Webflow niet kan; de kaartenlijst is een component (Minerals Grid List).
 // Oude opbouw (data-industry binnen het item) werkt ook nog.
 //
-// Knoppen/opties zonder mineralen: disabled (knop ook class is-disabled, niet klikbaar).
+// Knoppen zonder mineralen: disabled (class is-disabled, niet klikbaar; Minerals verbergt ze via de page-CSS).
+// Keuzemenu: industrieën zonder mineralen krijgen geen optie (een verborgen option werkt niet op iOS).
 // Actieve knop: class is-active + aria-pressed. Lijst krijgt is-filtered zolang er een
 // industrie gekozen is (de trap in het raster geldt alleen bij "View all", zie de page-CSS).
 // Keuze in de URL (?industry=<slug>) zodat een gefilterde lijst te delen is.
@@ -81,10 +82,8 @@
     if (select) {
       const present = new Set([...select.options].map((o) => o.value));
       data.names.forEach(([slug, name]) => {
-        if (present.has(slug)) return;
-        const option = new Option(name, slug);
-        option.disabled = !hasMinerals(slug);
-        select.add(option);
+        if (present.has(slug) || !hasMinerals(slug)) return;
+        select.add(new Option(name, slug));
       });
     }
 
