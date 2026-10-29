@@ -1,0 +1,1 @@
+(()=>{(function(){const t=decodeURIComponent(location.hash.slice(1));if(!t||!/^[\w-]+$/.test(t))return;function o(){const e=window.lumos&&window.lumos.modal;!e||!e.list||!e.list[t]||(e.open(t),history.replaceState(null,"",location.pathname+location.search))}document.readyState==="loading"?document.addEventListener("DOMContentLoaded",()=>setTimeout(o,0)):setTimeout(o,0)})();})();
