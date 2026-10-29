@@ -353,6 +353,13 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     scrollTo(0, y);
   }
 
+  // Balklinks (eigen overgang per link in de head-CSS van de nav) beginnen ook in de stand van de oude pagina:
+  // data-nav-links houdt ze zonder beweging vast, bij het loslaten lopen ze als trappetje naar de eigen stand
+  function holdLinks(nav, from) {
+    nav.setAttribute('data-nav-links', from > .5 ? 'hidden' : 'shown');
+    const item = nav.querySelector('.nav_links_bar_item');
+    if (item) getComputedStyle(item).opacity;
+  }
   // Nav in de stand van de oude pagina laten beginnen (ingeklapt of vol, --nav--scrolled uit de head-CSS van de nav) en
   // tijdens de vlucht naar de eigen stand laten groeien of krimpen: logo en balklinks bewegen zoals bij scrollen,
   // in de duur van de vlucht. Eigen stand: zoals nav.js (scrollY voorbij de balkhoogte).
@@ -365,8 +372,10 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     nav.style.transition = 'none';
     nav.style.setProperty('--nav--scrolled', from);
     getComputedStyle(nav).getPropertyValue('--nav--scrolled');
+    holdLinks(nav, from);
     const go = () => {
       nav.style.transition = '';
+      nav.removeAttribute('data-nav-links');
       nav.style.transitionDuration = dur + 'ms';
       nav.style.removeProperty('--nav--scrolled');
       setTimeout(() => { nav.style.transitionDuration = ''; }, dur + 100);
@@ -565,9 +574,10 @@ html.pms-calm-menu::view-transition-old(pms-menu) { animation: pms-calm-menu-up 
     nav.style.transition = 'none';
     nav.style.setProperty('--nav--scrolled', from);
     getComputedStyle(nav).getPropertyValue('--nav--scrolled');
+    holdLinks(nav, from);
     // nav.js meet bij scroll opnieuw: dan krijgt de balk zijn eigen toon (zacht, 300 ms), ook terug uit het geheugen van de
     // browser, waar nav.js nog de oude stand van deze pagina kent en anders niets zou bijwerken
-    const go = () => { nav.style.transition = ''; nav.style.removeProperty('--nav--scrolled'); dispatchEvent(new Event('scroll')); };
+    const go = () => { nav.style.transition = ''; nav.removeAttribute('data-nav-links'); nav.style.removeProperty('--nav--scrolled'); dispatchEvent(new Event('scroll')); };
     vt.ready.then(go, go);
     return true;
   }
