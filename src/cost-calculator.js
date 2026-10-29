@@ -9,7 +9,7 @@
 //     [data-calculator-prompt]          tekst zolang er geen mineraal gekozen is
 //     [data-calculator-price]           hier komt de prijsrange
 //     [data-calculator-on-request]      tekst als het mineraal geen prijs heeft
-//     [data-calculator-actions]         knoppenrij, zichtbaar zodra er een mineraal gekozen is
+//     [data-calculator-actions]         knoppenrij, onzichtbaar (wel ruimte) tot er een mineraal gekozen is
 //       [data-calculator-link="quote"]  knop naar de mineraalpagina met het offertepaneel (#quote)
 //       [data-calculator-link="view"]   knop naar de mineraalpagina
 //   [data-calculator-data]              verborgen gegevenslijst buiten de sectie (CMS Minerals)
@@ -27,7 +27,8 @@
 
   const num = (v) => {
     if (v == null || String(v).trim() === '') return null;
-    const n = Number(String(v).replace(',', '.'));
+    // Hele euro's; spaties en komma's zijn duizendtallen ("1,650"), een punt is het decimaalteken.
+    const n = Number(String(v).replace(/[\s,]/g, ''));
     return Number.isFinite(n) ? n : null;
   };
 
@@ -47,6 +48,12 @@
   }
 
   const show = (el, on) => { if (el) el.style.display = on ? '' : 'none'; };
+  // Knoppenrij houdt haar ruimte vast, zodat het blok niet verspringt bij de eerste keuze.
+  const reveal = (el, on) => {
+    if (!el) return;
+    el.style.visibility = on ? '' : 'hidden';
+    if (on) el.removeAttribute('inert'); else el.setAttribute('inert', '');
+  };
 
   function setup(root, items) {
     const select = root.querySelector('select[data-calculator-mineral]');
@@ -74,7 +81,7 @@
     function update() {
       const item = bySlug.get(select.value);
       show(prompt, !item);
-      show(actions, !!item);
+      reveal(actions, !!item);
       if (!item) { show(price, false); show(onRequest, false); return; }
 
       const base = `${prefix}/minerals/${item.slug}`;
