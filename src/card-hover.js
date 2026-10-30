@@ -18,8 +18,9 @@ const OUT = 0.25;
 const FADE_IN = 0.3;
 const FADE_OUT = 0.2;
 
-// Varianten waarin de foto meezoomt, op variant-id (blijft gelijk bij een andere naam).
-const ZOOM = { '51efa20c-c7be-48fe-973a-11367f19d622': 1.084 }; // CTA
+// Varianten waarin de foto meezoomt. Webflow zet de variant op de kaart als data-wf--card-primary--variant="cta"
+// (naam in kleine letters); oudere publicaties gaven data-wf-variant-state met het variant-id. Beide tellen.
+const ZOOM = { cta: 1.084, '51efa20c-c7be-48fe-973a-11367f19d622': 1.084 }; // CTA
 
 function init() {
   const gsap = window.gsap;
@@ -33,6 +34,16 @@ function init() {
     ease.fade = window.CustomEase.create('pmsFade', '0.5,0,0.5,1');
   }
 
+  // Kaarten zonder link of knop (bv. een toepassing zonder industrie) reageren niet: ze zijn niet klikbaar.
+  // Uitzondering: varianten waarvan de hovertekst de inhoud is (Certificate: naam van de norm, nooit klikbaar).
+  // (Binnen init: dit script draait als gewoon script, alles op het bovenste niveau is globaal.)
+  const hoverWithoutLink = ['certificate'];
+  const variantOf = (card) => {
+    const named = card.closest('[data-wf--card-primary--variant]');
+    if (named) return named.getAttribute('data-wf--card-primary--variant');
+    return card.closest('[data-wf-variant-state]')?.getAttribute('data-wf-variant-state') || '';
+  };
+
   // Alleen met een muis en vanaf tablet; op mobiel regelt Webflow Interactions de CTA (scroll).
   const canHover = window.matchMedia('(hover: hover) and (min-width: 768px)');
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -45,7 +56,9 @@ function init() {
     const image = part('image');
     const parts = [marker, title, text, image].filter(Boolean);
 
-    const variant = card.closest('[data-wf-variant-state]')?.getAttribute('data-wf-variant-state');
+    const variant = variantOf(card);
+    const clickable = !!card.querySelector('.clickable_wrap a[href], .clickable_wrap button');
+    if (!clickable && !hoverWithoutLink.includes(variant)) return;
     const zoom = ZOOM[variant] || 1;
     const restX = title ? gsap.getProperty(title, 'x') : 0;
     const reveal = !!text && text.getBoundingClientRect().height === 0;

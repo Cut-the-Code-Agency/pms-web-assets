@@ -7,6 +7,7 @@
 //                        attribuut in de nieuwe actieve slide splitsen in letters en bewegen samen,
 //                        zodat een blauwe titel en zijn lichte kopie gelijk blijven lopen.
 //   --slide-split: off   (CSS) op zo'n element: geen letteranimatie, bv. waar de titel al in beeld stond.
+// Letters staan per woord bij elkaar (woorden breken niet), koppen houden hun tekst voor schermlezers (aria-label).
 //
 // Waarom een script: Webflow Interactions kennen geen "slide gewisseld"-trigger, en een interaction
 // op de class laat de stagger door de titels van alle slides heen lopen.
@@ -26,11 +27,51 @@
       ease = window.CustomEase.create('pmsSlideTitle', '0.75,0,0.5,1');
     }
 
+    // Letters per woord: elk woord een inline-block dat niet breekt, zodat een lange naam ("Guyanese bauxite") op
+    // een woordgrens naar de volgende regel gaat en niet midden in een woord.
+    // Schermlezers: de stukjes zijn aria-hidden. Een kop krijgt zijn tekst als aria-label (een aria-label op een
+    // gewone div of span lezen schermlezers niet voor); andere tekst (de graad) een onzichtbare kopie op zijn plek
+    // vóór of na de kop, als los kind (niet in de graad zelf, zodat scripts die die tekst lezen, zoals
+    // quote-slider.js, niets dubbel krijgen; wel binnen het element, zodat een verborgen weergave stil blijft).
+    const HEADING = 'h1,h2,h3,h4,h5,h6,[role="heading"]';
+    const SR = 'position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0';
+    const clean = (t) => t.replace(/\s+/g, ' ').trim();
+    const srCopy = (texts, where, anchor) => {
+      if (!texts.length) return;
+      const sr = document.createElement('span');
+      sr.textContent = texts.join(' ');
+      sr.style.cssText = SR;
+      anchor.insertAdjacentElement(where, sr);
+    };
+    const split = (el) => {
+      // Stil als het element zelf (of iets tussen het element en zijn slide) aria-hidden is, zoals de lichte kopie;
+      // de slide zelf telt niet mee, want de slider zet aria-hidden op slides buiten beeld en haalt het weer weg.
+      let read = true;
+      for (let n = el; n && !n.classList.contains('swiper-slide'); n = n.parentElement) {
+        if (n.getAttribute('aria-hidden') === 'true') read = false;
+      }
+      const heads = !read ? [] : el.matches(HEADING) ? [el] : [...el.querySelectorAll(HEADING)];
+      const before = [], after = [];
+      if (read) {
+        [el, ...el.querySelectorAll('*')].forEach((n) => {
+          if (n.children.length || n.closest(HEADING) || !clean(n.textContent)) return;
+          const behind = heads.length && heads[0].compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING;
+          (behind ? after : before).push(clean(n.textContent));
+        });
+        heads.forEach((h) => h.setAttribute('aria-label', clean(h.textContent)));
+      }
+      const s = new window.SplitText(el, { type: 'words,chars', mask: 'chars', aria: 'none' });
+      s.words.forEach((w) => { w.style.whiteSpace = 'nowrap'; w.setAttribute('aria-hidden', 'true'); });
+      if (heads.length) srCopy(before, 'beforebegin', heads[0]); else srCopy(before, 'beforeend', el);
+      srCopy(after, 'beforeend', el);
+      return s;
+    };
+
     const play = (slide) => {
       slide.querySelectorAll('[data-slide-split]').forEach((el) => {
         // Uit te zetten per weergave met CSS: --slide-split: off (bv. Mineral Slide Card, waar de titel al zichtbaar is).
         if (getComputedStyle(el).getPropertyValue('--slide-split').trim() === 'off') return;
-        if (!el._pmsSplit) el._pmsSplit = new window.SplitText(el, { type: 'chars', mask: 'chars' });
+        if (!el._pmsSplit) el._pmsSplit = split(el);
         gsap.fromTo(el._pmsSplit.chars, { yPercent: 110 }, { yPercent: 0, duration: DURATION, ease, stagger: STAGGER, overwrite: true });
       });
     };

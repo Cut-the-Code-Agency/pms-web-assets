@@ -4,13 +4,23 @@
 // het eerste beeld. Op /products en het Minerals-sjabloon staat daarnaast <link rel="expect" href="#main" blocking="render">.
 // Besluit en metingen: PMS-repo decisions/components/kaart-naar-product.md (prototype: prototypes/kaart-naar-product).
 // Browsers zonder overgangen tussen pagina's krijgen een gewone paginawissel; minder beweging: ook.
+// Balklinks (eigen overgang per link in de head-CSS van de nav) beginnen ook in de stand van de oude pagina:
+// data-nav-links houdt ze zonder beweging vast, bij het loslaten lopen ze als trappetje naar de eigen stand.
+// Gedeeld door beide blokken hieronder (stond in het eerste blok, het tweede gaf "holdLinks is not defined" en bleef
+// dan met een kleine nav staan). esbuild --format=iife zet het hele bestand in één functie: dit blijft lokaal.
+function holdLinks(nav, from) {
+  nav.setAttribute('data-nav-links', from > .5 ? 'hidden' : 'shown');
+  const item = nav.querySelector('.nav_links_bar_item');
+  if (item) getComputedStyle(item).opacity;
+}
+
 (function () {
   const html = document.documentElement;
   const KEY = 'pms-vt-handoff';
   const SCROLL_KEY = 'pms-vt-grid-scroll';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const supported = 'onpagereveal' in window && 'CSSViewTransitionRule' in window;
-  const P = (window.pmsVT = { version: '1.75.0' });
+  const P = (window.pmsVT = { version: '1.78.0' });
 
   // Adressen met en zonder taalvoorvoegsel (/products/x, /nl/products/x, /de/products/x), op elk domein
   const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/products(?:\/([a-z0-9-]+))?\/?$/;
@@ -353,13 +363,6 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
     scrollTo(0, y);
   }
 
-  // Balklinks (eigen overgang per link in de head-CSS van de nav) beginnen ook in de stand van de oude pagina:
-  // data-nav-links houdt ze zonder beweging vast, bij het loslaten lopen ze als trappetje naar de eigen stand
-  function holdLinks(nav, from) {
-    nav.setAttribute('data-nav-links', from > .5 ? 'hidden' : 'shown');
-    const item = nav.querySelector('.nav_links_bar_item');
-    if (item) getComputedStyle(item).opacity;
-  }
   // Nav in de stand van de oude pagina laten beginnen (ingeklapt of vol, --nav--scrolled uit de head-CSS van de nav) en
   // tijdens de vlucht naar de eigen stand laten groeien of krimpen: logo en balklinks bewegen zoals bij scrollen,
   // in de duur van de vlucht. Eigen stand: zoals nav.js (scrollY voorbij de balkhoogte).

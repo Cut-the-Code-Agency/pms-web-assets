@@ -46,6 +46,7 @@
     const nav = document.querySelector('[data-nav="component"]');
     if (!nav) return;
     regionDropdown(nav);
+    menuKeys(nav);
     languageLinks(nav);
     activeParent(nav);
     document.querySelectorAll('.footer_links').forEach(activeParent);
@@ -107,6 +108,44 @@
     if (menuButton) new MutationObserver(() => {
       if (!menuButton.classList.contains('w--open')) setOpen(false);
     }).observe(menuButton, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  // Open menu en toetsenbord. Webflow's navbar houdt de focus niet in het menu: Tab na de laatste link in het paneel
+  // ging naar de pagina erachter, en Esc sloot het menu alleen met de focus in het paneel. Nu: zolang het menu open
+  // is loopt Tab rond door de zichtbare focusstops van de nav (balk + paneel: logo, taal, menuknop, links), Shift+Tab
+  // ook terug; Esc sluit het menu altijd (via de menuknop, zoals een klik) en zet de focus op de menuknop.
+  // Staat het taalvenster open, dan sluit Esc eerst dat (regionDropdown); Webflow sluit dan zelf ook het menu.
+  function menuKeys(nav) {
+    const button = nav.querySelector('[data-nav="menu-button"]');
+    if (!button) return;
+    const isOpen = () => button.classList.contains('w--open');
+    const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+    const stops = () => [...nav.querySelectorAll(FOCUSABLE)].filter((el) => {
+      if (el.closest('[inert], [aria-hidden="true"]') || !el.getClientRects().length) return false;
+      const cs = getComputedStyle(el);
+      return cs.visibility !== 'hidden' && cs.display !== 'none';
+    });
+    document.addEventListener('keydown', (e) => {
+      if (!isOpen()) return;
+      if (e.key === 'Tab') {
+        const list = stops();
+        if (!list.length) return;
+        const first = list[0], last = list[list.length - 1];
+        const at = document.activeElement;
+        const inside = nav.contains(at);
+        if (e.shiftKey && (at === first || !inside)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (at === last || !inside)) { e.preventDefault(); first.focus(); }
+        return;
+      }
+      if (e.key === 'Escape') {
+        // Webflow sluit het menu zelf als de focus in het paneel staat; daarna pas kijken of het nog open is
+        setTimeout(() => {
+          if (!isOpen() || nav.hasAttribute('data-region-open')) return;
+          button.click();
+          button.focus();
+        }, 0);
+      }
+    });
   }
 
   // Taalkeuze in het taalvenster (Webflow Localization: Engels in de hoofdmap, Nederlands op /nl, overal
