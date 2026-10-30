@@ -8,10 +8,10 @@
 //                                               een span.quote-slider_form_name; wisselt met een korte fade.
 //   [data-quote-slider]                         kaart met de Lumos Slider (Swiper) en Mineral Slides
 //     .mineral-slide_wrap[data-name][data-slug] één mineraal (Name / Slug uit het CMS)
-//     [data-quote-link] a                       "View product" → /minerals/<slug>
+//     [data-quote-link] a                       "View product" → /products/<slug>
 //   input[data-quote-product]                   verborgen veld "Product" in de Quote Form
 // Zonder data-name valt het script terug op titel + graad uit de kaart. Zonder script: kop
-// "Request a quote for our minerals", knop naar /minerals, Product leeg.
+// "Request a quote for our minerals", knop naar /products, Product leeg.
 
 (() => {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -46,7 +46,7 @@
       const slug = wrap ? wrap.getAttribute('data-slug') : '';
       if (input) input.value = name;
       if (link) {
-        link.setAttribute('href', slug ? `/minerals/${slug}` : '/minerals');
+        link.setAttribute('href', slug ? `/products/${slug}` : '/products');
         if (name) link.setAttribute('aria-label', `View product: ${name}`);
       }
       if (!name || name === last) return;
@@ -149,7 +149,7 @@
       if (formTitle) formTitle.replaceChildren(...formTitleContent(firstName));
       if (input) input.value = firstName;
       const slug = first.getAttribute('data-slug');
-      if (link && slug) link.setAttribute('href', `/minerals/${slug}`);
+      if (link && slug) link.setAttribute('href', `/products/${slug}`);
       last = firstName;
     }
 

@@ -150,7 +150,7 @@
   }
 
   // Webflow markeert alleen de link naar de pagina zelf (w--current, aria-current="page"). Op een detailpagina
-  // (/minerals/zircon) wordt de ouderlink (/minerals) actief: data-nav-current (de head-CSS kijkt naar beide) en
+  // (/products/zircon) wordt de ouderlink (/products) actief: data-nav-current (de head-CSS kijkt naar beide) en
   // aria-current="true". Geldt voor de balk, het paneel en de paginalinks in de footer (.footer_links). Niet w--current zelf: webflow.js haalt die bij het starten weer weg.
   function activeParent(nav) {
     const path = location.pathname.replace(/\/+$/, '');

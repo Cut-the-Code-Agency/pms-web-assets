@@ -1,5 +1,5 @@
 // Modal via het adres: opent de Lumos Modal waarvan data-modal-target gelijk is aan de hash van de URL
-// (bv. /minerals/zircon#quote opent het offertepaneel). Gebruikt door de knop "Request a quote" van
+// (bv. /products/zircon#quote opent het offertepaneel). Gebruikt door de knop "Request a quote" van
 // de kostencalculator op Home (ticket 1244r2tgcat). Laadt niets; doet niets zonder passende modal.
 //
 // Het Lumos Modal-script registreert zijn modals bij DOMContentLoaded in window.lumos.modal; daarom

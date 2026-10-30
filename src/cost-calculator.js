@@ -84,7 +84,7 @@
       reveal(actions, !!item);
       if (!item) { show(price, false); show(onRequest, false); return; }
 
-      const base = `${prefix}/minerals/${item.slug}`;
+      const base = `${prefix}/products/${item.slug}`;
       root.querySelectorAll('[data-calculator-link="quote"] a').forEach((a) => { a.href = `${base}#quote`; });
       root.querySelectorAll('[data-calculator-link="view"] a').forEach((a) => { a.href = base; });
 

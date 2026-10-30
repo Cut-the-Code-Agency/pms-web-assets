@@ -1,7 +1,7 @@
 // Paginaovergangen (View Transitions tussen pagina's): mineralenkaart ↔ productpagina (eerste blok) en een rustige
 // overgang tussen alle andere pagina's (tweede blok).
 // Laden als gewoon script in de <head> van elke pagina (site-breed, niet defer/async): pagereveal moet luisteren vóór
-// het eerste beeld. Op /minerals en het Minerals-sjabloon staat daarnaast <link rel="expect" href="#main" blocking="render">.
+// het eerste beeld. Op /products en het Minerals-sjabloon staat daarnaast <link rel="expect" href="#main" blocking="render">.
 // Besluit en metingen: PMS-repo decisions/components/kaart-naar-product.md (prototype: prototypes/kaart-naar-product).
 // Browsers zonder overgangen tussen pagina's krijgen een gewone paginawissel; minder beweging: ook.
 (function () {
@@ -10,10 +10,10 @@
   const SCROLL_KEY = 'pms-vt-grid-scroll';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const supported = 'onpagereveal' in window && 'CSSViewTransitionRule' in window;
-  const P = (window.pmsVT = { version: '1.64.0' });
+  const P = (window.pmsVT = { version: '1.75.0' });
 
-  // Adressen met en zonder taalvoorvoegsel (/minerals/x, /nl/minerals/x, /de/minerals/x), op elk domein
-  const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/minerals(?:\/([a-z0-9-]+))?\/?$/;
+  // Adressen met en zonder taalvoorvoegsel (/products/x, /nl/products/x, /de/products/x), op elk domein
+  const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/products(?:\/([a-z0-9-]+))?\/?$/;
   const pathOf = url => new URL(url, location.href).pathname;
   const slugOf = url => (pathOf(url).match(PATH) || [])[1] || null;
   const isGrid = url => { const m = pathOf(url).match(PATH); return !!m && !m[1]; };
@@ -80,7 +80,7 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
   if (window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('speculationrules')) {
     const rules = document.createElement('script');
     rules.type = 'speculationrules';
-    rules.textContent = JSON.stringify({ prefetch: [{ where: { or: [{ href_matches: '/minerals/*' }, { href_matches: '/*/minerals/*' }] }, eagerness: 'moderate' }] });
+    rules.textContent = JSON.stringify({ prefetch: [{ where: { or: [{ href_matches: '/products/*' }, { href_matches: '/*/products/*' }] }, eagerness: 'moderate' }] });
     document.head.append(rules);
   }
 
@@ -465,7 +465,7 @@ html.vt-arriving :is(.product-hero_meta, .product-hero_formula, .product-hero_nu
   const MENU = 750 * k; // menu open + link: het paneel schuift op de nieuwe pagina weg (Position exit, motion.md)
 
   // Kaart ↔ productpagina: dat doet page-transition.js (zelfde adresregels)
-  const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/minerals(?:\/([a-z0-9-]+))?\/?$/;
+  const PATH = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/products(?:\/([a-z0-9-]+))?\/?$/;
   const pathOf = url => new URL(url, location.href).pathname;
   const slugOf = url => (pathOf(url).match(PATH) || [])[1] || null;
   const isGrid = url => { const m = pathOf(url).match(PATH); return !!m && !m[1]; };
