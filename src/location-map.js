@@ -6,7 +6,7 @@
 //   3. Zoeken naar steden, dorpen en buurtschappen via Geoapify Address Autocomplete (type=city).
 //      Na een keuze schuift de kaart naar de plaats, landt de marker erop, verschijnt de echte lokale tijd,
 //      worden de verborgen velden (Place, Country, Latitude, Longitude, Timezone) gevuld en gaat stap 2 open.
-//   4. Zonder sleutel of als Geoapify faalt: stap 2 gaat meteen open en de bezoeker typt de plaats zelf.
+//   4. Zonder sleutel of als Geoapify faalt: de bezoeker typt de plaats zelf; stap 2 opent na Enter of het veld verlaten.
 // Pauzeert buiten beeld. prefers-reduced-motion: marker staat stil, de kaart springt zonder beweging.
 // Zonder JS: statische kaart (img), alle velden zichtbaar en gewoon te versturen.
 //
@@ -396,12 +396,24 @@
       step2.setAttribute('data-open', '');
       if (animate) gsap.fromTo(step2, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out', clearProps: 'opacity,transform' }); // geen visibility: dan kan de focus er niet heen
     }
-    // Zonder werkende zoekdienst typt de bezoeker de plaats zelf
+    // Zonder werkende zoekdienst typt de bezoeker de plaats zelf; stap 2 komt pas na een ingevulde plaats
+    // (Enter of het veld verlaten), zodat het formulier ook dan in stappen blijft.
+    let free = !source;
     function freeMode() {
+      free = true;
       closeList();
-      openStep2();
     }
-    if (!source) freeMode();
+    function acceptTyped(moveFocus) {
+      const v = input.value.trim();
+      if (v.length < 2) return;
+      if (fields.place) fields.place.value = v;
+      const first = !step2.hasAttribute('data-open');
+      openStep2();
+      if (first && moveFocus) {
+        const next = step2.querySelector('input:not([type="hidden"]), textarea, select');
+        if (next) next.focus({ preventScroll: true });
+      }
+    }
 
     function setFields(p) {
       const set = (k, v) => { if (fields[k]) fields[k].value = v; };
@@ -445,7 +457,7 @@
     async function lookup() {
       const q = input.value.trim();
       const id = ++reqId;
-      if (!source || q.length < 2) { closeList(); return; }
+      if (free || q.length < 2) { closeList(); return; }
       let res;
       try {
         res = await source.suggest(q);
@@ -487,6 +499,7 @@
       timer = setTimeout(lookup, pasted ? 0 : 250);
     });
     input.addEventListener('paste', () => { pasted = true; });
+    input.addEventListener('change', () => { if (free) acceptTyped(false); });
     input.addEventListener('blur', () => setTimeout(closeList, 150));
     dropdown.addEventListener('mousedown', (e) => { if (!e.target.closest('a')) e.preventDefault(); });
     input.addEventListener('keydown', (e) => {
@@ -498,9 +511,9 @@
         const el = list.children[active];
         if (el) el.scrollIntoView({ block: 'nearest' });
       } else if (e.key === 'Enter') {
-        if (!source) return;
         e.preventDefault(); // Enter in het zoekveld verstuurt het formulier niet
-        if (items.length) choose(Math.max(active, 0));
+        if (free) acceptTyped(true);
+        else if (items.length) choose(Math.max(active, 0));
         else { pasted = true; lookup(); }
       } else if (e.key === 'Escape') {
         closeList();
