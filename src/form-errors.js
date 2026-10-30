@@ -5,6 +5,8 @@
 // Webflow-markup (Lumos-formulieren):
 //   form.form_element[data-error-required][data-error-email][data-error-choice][data-error-terms]
 //       meldingsteksten per formulier (vertaalbaar); zonder attribuut de Engelse tekst hieronder
+//   form.form_element[data-error-field-<name>]   optioneel: eigen melding voor één veld (name in kleine letters),
+//       gaat voor de algemene tekst, bv. data-error-field-message="Please describe your material requirements."
 //   .form_label_wrap › .form_field               tekstveld / textarea  → melding onder het veld
 //   .form_ui_item › input[type=checkbox|radio]    vinkje / keuzerondje  → melding onder het vinkje of de groep
 // Melding: p.form_field_error (Webflow-stijl), veld krijgt aria-invalid en aria-describedby.
@@ -27,6 +29,9 @@
     const d = form.dataset;
     if (f.type === 'radio') return d.errorChoice || TEXT.choice;
     if (f.type === 'checkbox') return d.errorTerms || TEXT.terms;
+    // Eigen melding per veld: data-error-field-<name> op het formulier (name in kleine letters, bv. data-error-field-message).
+    const own = f.name && form.getAttribute(`data-error-field-${f.name.toLowerCase()}`);
+    if (own) return own;
     if (f.validity.typeMismatch || f.validity.patternMismatch) return d.errorEmail || TEXT.email;
     return d.errorRequired || TEXT.required;
   }
