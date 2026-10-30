@@ -119,6 +119,9 @@
     template.remove();
 
     const VIEW = +root.dataset.view || 90;
+    // Teksten uit Webflow (vertaalbaar per taal); {q} = zoekterm, {n} = aantal
+    const TEXT_NONE = root.dataset.textNoResult || 'No place found for "{q}"';
+    const TEXT_RESULTS = root.dataset.textResults || '{n} places found';
     const FOLLOW = +root.dataset.follow || 0.035;
     const key = (root.dataset.geoapifyKey || '').trim();
     const gsap = window.gsap;
@@ -261,7 +264,7 @@
       colors = {
         ocean: cs.backgroundColor || colors.ocean,
         line: 'rgba(255, 255, 255, .8)',
-        mark: '#fff',
+        mark: cs.color || '#fff',
         font: ts.fontFamily || 'sans-serif',
       };
     }
@@ -390,6 +393,11 @@
     input.setAttribute('aria-expanded', 'false');
     input.setAttribute('aria-controls', listId);
     input.setAttribute('autocomplete', 'off');
+    const live = document.createElement('p');
+    live.className = 'u-sr-only';
+    live.setAttribute('aria-live', 'polite');
+    combo.append(live);
+    const announce = (t) => { live.textContent = t; };
 
     function openStep2() {
       if (step2.hasAttribute('data-open')) return;
@@ -435,8 +443,8 @@
       if (!items.length) {
         const li = template.cloneNode(true);
         li.removeAttribute('role');
-        li.style.cursor = 'default';
-        li.querySelector('[data-location-option-name]').textContent = `No place found for "${query}"`;
+        li.setAttribute('aria-disabled', 'true');
+        li.querySelector('[data-location-option-name]').textContent = TEXT_NONE.replace('{q}', query);
         li.querySelector('[data-location-option-meta]').textContent = '';
         list.append(li);
       }
@@ -449,8 +457,15 @@
         li.addEventListener('mousedown', (e) => { e.preventDefault(); choose(i); });
         list.append(li);
       });
+      const wasOpen = dropdown.hasAttribute('data-open');
       dropdown.setAttribute('data-open', '');
       input.setAttribute('aria-expanded', 'true');
+      if (!wasOpen) {
+        announce(items.length ? TEXT_RESULTS.replace('{n}', items.length) : TEXT_NONE.replace('{q}', query));
+        // Op een telefoon kan het veld onderin staan: lijst in beeld schuiven
+        const r = dropdown.getBoundingClientRect();
+        if (r.bottom > innerHeight) dropdown.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+      }
       if (active >= 0) input.setAttribute('aria-activedescendant', `${listId}-${active}`);
       else input.removeAttribute('aria-activedescendant');
     }
@@ -483,9 +498,12 @@
       input.value = it.meta ? `${it.name}, ${it.meta}` : it.name;
       setFields(p);
       input.dispatchEvent(new Event('change', { bubbles: true }));
-      await travelTo(p);
+      // Eerst stap 2 openen (het kader groeit), dan vliegen met de nieuwe maat: zo springt de kaart niet na de landing
       const first = !step2.hasAttribute('data-open');
       openStep2();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      resize();
+      await travelTo(p);
       if (first) {
         const next = step2.querySelector('input:not([type="hidden"]), textarea, select');
         if (next) next.focus({ preventScroll: true });
@@ -500,11 +518,17 @@
     });
     input.addEventListener('paste', () => { pasted = true; });
     input.addEventListener('change', () => { if (free) acceptTyped(false); });
-    input.addEventListener('blur', () => setTimeout(closeList, 150));
+    // Tab naar de links in de vermelding: lijst open laten zolang de focus in het zoekblok blijft
+    const leaving = (e) => !(e.relatedTarget && combo.contains(e.relatedTarget));
+    input.addEventListener('blur', (e) => { if (leaving(e)) setTimeout(closeList, 150); });
+    dropdown.addEventListener('focusout', (e) => { if (leaving(e)) closeList(); });
     dropdown.addEventListener('mousedown', (e) => { if (!e.target.closest('a')) e.preventDefault(); });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        if (!items.length) return;
+        if (!items.length) {
+          if (!free && input.value.trim().length >= 2) { e.preventDefault(); lookup(); }
+          return;
+        }
         e.preventDefault();
         active = (active + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
         renderList(input.value.trim());
