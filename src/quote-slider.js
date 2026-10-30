@@ -1,6 +1,7 @@
 // Quote Slider (Contact): de offerte hoort bij het mineraal dat in de slider in beeld is.
 // Markup (Webflow-component Quote Slider):
-//   [data-quote-title="Request a quote for"]   kop; wordt "Request a quote for <mineraal>". Vanaf 992 px staat
+//   [data-quote-title="Request a quote for"]   kop; wordt "Request a quote for <mineraal>" (ook als aria-label,
+//                                               bij elke wissel bijgewerkt). Vanaf 992 px staat
 //                                               de naam op een eigen regel en is de kop zo hoog als de hoogste
 //                                               naam (formulier verspringt niet); ≤ 991 groeit of krimpt de kop
 //                                               zacht mee met de naam (300 ms), de kaart schuift mee.
@@ -38,6 +39,12 @@
     if (!card || !swiperEl) return;
     const prefix = title ? title.getAttribute('data-quote-title') || 'Request a quote for' : '';
     let last = '';
+    // Naam van de kop voor schermlezers: altijd "Request a quote for <naam>" met spatie. Webflow's letter-splitsing
+    // (inlaadanimatie) zet eenmalig een aria-label uit de tekst, zonder spatie bij de <br> en daarna nooit meer;
+    // het script zet hem bij elke wissel en zet hem terug als iets anders hem overschrijft.
+    const label = () => (title && last ? `${prefix} ${last}` : '');
+    const setLabel = () => { const l = label(); if (l && title.getAttribute('aria-label') !== l) title.setAttribute('aria-label', l); };
+    if (title && 'MutationObserver' in window) new MutationObserver(setLabel).observe(title, { attributes: true, attributeFilter: ['aria-label'] });
 
     function update(swiper) {
       const slide = swiper.slides[swiper.activeIndex];
@@ -53,6 +60,7 @@
       last = name;
       setFormTitle(name);
       if (!title) return;
+      setLabel();
       if (reduce.matches || !('animate' in title)) { title.replaceChildren(...head(prefix, name)); return; }
       swap(name);
     }
@@ -151,6 +159,7 @@
       const slug = first.getAttribute('data-slug');
       if (link && slug) link.setAttribute('href', `/products/${slug}`);
       last = firstName;
+      if (title) setLabel();
     }
 
     // Desktop: kophoogte vast op de hoogste variant, zodat het formulier niet verspringt bij korte en lange

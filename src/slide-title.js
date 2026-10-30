@@ -8,6 +8,7 @@
 //                        zodat een blauwe titel en zijn lichte kopie gelijk blijven lopen.
 //   --slide-split: off   (CSS) op zo'n element: geen letteranimatie, bv. waar de titel al in beeld stond.
 // Letters staan per woord bij elkaar (woorden breken niet), koppen houden hun tekst voor schermlezers (aria-label).
+// In een lus-slider is de actieve slide altijd leesbaar, ook als het een Swiper-kopie is (zie expose).
 //
 // Waarom een script: Webflow Interactions kennen geen "slide gewisseld"-trigger, en een interaction
 // op de class laat de stagger door de titels van alle slides heen lopen.
@@ -76,6 +77,27 @@
       });
     };
 
+    // Lus (Slider met is-loop): de PMS-embed in de Slider maakt Swiper-kopieën aria-hidden + inert, zodat elk
+    // mineraal één keer gelezen wordt. Na een rondje staat de actieve slide echter op een kopie en hoort een
+    // schermlezer niets. Daarom: is de actieve slide een kopie, dan wordt die leesbaar en de echte slide met
+    // dezelfde index (buiten beeld) stil; bij de volgende wissel gaat alles terug. Draait na de embed
+    // (die luistert eerder op dezelfde events), de Lumos-sliderbron blijft ongewijzigd.
+    const SHOWN = 'data-pms-copy-shown', STILL = 'data-pms-twin-still';
+    const expose = (swiper) => {
+      if (!swiper.params || !swiper.params.loop || !swiper.slides) return;
+      const slides = Array.from(swiper.slides); // gewone array: Swiper 8 geeft een Dom7-lijst met een eigen find()
+      const active = slides[swiper.activeIndex];
+      const copy = active && active.classList.contains('swiper-slide-duplicate') ? active : null;
+      const index = copy && copy.getAttribute('data-swiper-slide-index');
+      const twin = copy && slides.find((s) => !s.classList.contains('swiper-slide-duplicate') && s.getAttribute('data-swiper-slide-index') === index);
+      slides.forEach((s) => {
+        if (s !== copy && s.hasAttribute(SHOWN)) { s.setAttribute('aria-hidden', 'true'); s.inert = true; s.removeAttribute(SHOWN); }
+        if (s !== twin && s.hasAttribute(STILL)) { s.removeAttribute('aria-hidden'); s.inert = false; s.removeAttribute(STILL); }
+      });
+      if (copy && (copy.inert || copy.getAttribute('aria-hidden') === 'true')) { copy.removeAttribute('aria-hidden'); copy.inert = false; copy.setAttribute(SHOWN, ''); }
+      if (twin && !twin.hasAttribute(STILL)) { twin.setAttribute('aria-hidden', 'true'); twin.inert = true; twin.setAttribute(STILL, ''); }
+    };
+
     const hook = (swiper) => {
       if (swiper.__pmsSlideTitle) return;
       swiper.__pmsSlideTitle = true;
@@ -83,6 +105,8 @@
         const slide = swiper.slides[swiper.activeIndex];
         if (slide) play(slide);
       });
+      ['slideChange', 'loopFix', 'update', 'slidesLengthChange'].forEach((ev) => swiper.on(ev, () => expose(swiper)));
+      expose(swiper);
     };
 
     // Swiper zet el.swiper bij het opstarten; het Lumos-script kan na dit script draaien.
