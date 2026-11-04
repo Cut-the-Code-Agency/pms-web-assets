@@ -4,7 +4,7 @@
 //
 // Instellen op de script-tag (geen markup in Webflow nodig):
 //   <script src=".../stone-travel.js" defer
-//     data-stone-slug="foundry-grade-chromite-sand"                         ← video uit spin/<slug>/
+//     data-stone-slug="foundry-grade-chromite-sand"                         ← video uit spin/<slug>/ (hero-stone.js gaat voor)
 //     data-stone-start=".home-hero_visual"                                  ← startvlak (daarin staat de foto als fallback)
 //     data-stone-land="[data-slug='foundry-grade-chromite-sand'] .mineral-slide_visual" ← landingsvlak (alle kopieën)
 //     data-stone-light=".home-hero_title.is-light, .mineral-slide_title.is-light"   ← lichte titels, alleen op de steen
@@ -26,15 +26,22 @@ const DAMP = 8; // naloop van de scroll (hoger = strakker)
   const script = document.currentScript;
   const cfg = script.dataset;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  // hero-stone.js (head van Home) kiest per bezoek de steen: die volgen; zonder draaiende video blijft hij een foto
+  const pick = window.pmsHeroStone;
+  if (pick && !pick.spin) return;
+  const slug = pick?.slug || cfg.stoneSlug;
   const start = document.querySelector(cfg.stoneStart);
-  if (!start || !cfg.stoneSlug) return;
+  if (!start || !slug) return;
   // WebKit (Safari, en elke browser op iPhone/iPad) speelt alpha alleen in HEVC: op de motor kiezen, niet op de naam
   const safari = navigator.vendor === 'Apple Computer, Inc.' || /iP(hone|ad|od)/.test(navigator.userAgent)
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const src = new URL(`../spin/${cfg.stoneSlug}/spin.${safari ? 'mp4' : 'webm'}`, script.src).href;
+  const src = new URL(`../spin/${slug}/spin.${safari ? 'mp4' : 'webm'}`, script.src).href;
   const heroSection = start.closest('section') || start.parentElement;
   const sizeFactor = parseFloat(cfg.stoneSize || '1');
-  const landing = cfg.stoneLand || null;
+  // landingsvlak: de slide van de gekozen steen (in data-stone-land staat {slug} of de slug van data-stone-slug)
+  let landing = cfg.stoneLand || null;
+  if (landing && cfg.stoneSlug) landing = landing.replaceAll(cfg.stoneSlug, slug);
+  if (landing) landing = landing.replaceAll('{slug}', slug);
 
   // Laag over de hele pagina, onder de navigatie (z-index 1000); klikken gaan erdoorheen
   const stage = document.createElement('div');
