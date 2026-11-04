@@ -28,7 +28,9 @@ const DAMP = 8; // naloop van de scroll (hoger = strakker)
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const start = document.querySelector(cfg.stoneStart);
   if (!start || !cfg.stoneSlug) return;
-  const safari = /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent);
+  // WebKit (Safari, en elke browser op iPhone/iPad) speelt alpha alleen in HEVC: op de motor kiezen, niet op de naam
+  const safari = navigator.vendor === 'Apple Computer, Inc.' || /iP(hone|ad|od)/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const src = new URL(`../spin/${cfg.stoneSlug}/spin.${safari ? 'mp4' : 'webm'}`, script.src).href;
   const heroSection = start.closest('section') || start.parentElement;
   const sizeFactor = parseFloat(cfg.stoneSize || '1');

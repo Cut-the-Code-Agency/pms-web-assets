@@ -14,8 +14,10 @@
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
   const slugFromPath = p => (p.match(/\/(?:products|minerals)\/([^/?#]+)/) || [])[1];
-  // Safari speelt alpha alleen in HEVC; Chrome speelt HEVC wel maar zonder alpha, dus op de browser kiezen
-  const safari = /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent);
+  // WebKit (Safari, en elke browser op iPhone/iPad) speelt alpha alleen in HEVC; Chrome/Firefox elders alleen in WebM.
+  // Op de motor kiezen, niet op de browsernaam: Chrome op iOS is ook WebKit.
+  const safari = navigator.vendor === 'Apple Computer, Inc.' || /iP(hone|ad|od)/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // Laag exact over het beeldvlak van de img leggen (object-fit: contain op een vierkant beeld)
   function overlay(img, el, onSize) {
