@@ -267,13 +267,16 @@ const DAMP = 8; // naloop van de scroll (hoger = strakker)
     video.play().catch(() => {});
     try { await playing; } catch { stage.remove(); return; }
     await document.fonts.ready;
+    // De hero-foto is beeld 0 van de video op exact de startplek: in hetzelfde beeld wisselen, zonder overvloei
+    // (twee bijna gelijke beelden die half doorzichtig over elkaar liggen geven een kort lichter moment)
     requestAnimationFrame(frame);
     requestAnimationFrame(() => {
       ready = true;
       hideDom();
+      stage.style.transition = 'none';
       stage.style.opacity = '1';
       const fallback = start.querySelector('img');
-      if (fallback) { fallback.style.transition = 'opacity .6s'; fallback.style.opacity = '0'; }
+      if (fallback) fallback.style.opacity = '0';
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin);
