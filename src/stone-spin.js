@@ -1,16 +1,16 @@
 // Stone spin: draaiende steen als beeldreeks (AI-video → 48 vrijstaande WebP's per mineraal, map spin/<slug>/).
 // De stilstaande steen (CMS Stone Image, zelfde uitsnede als beeld 0) blijft staan tot alle beelden binnen zijn,
 // daarna vervaagt hij naar een canvas dat vanzelf rondjes draait. Minder beweging: blijft de foto.
-// Doelen: de steen in Product Hero (slug uit de URL) en steenafbeeldingen in een link naar /minerals/<slug>.
+// Doelen: de steen in Product Hero (slug uit de URL /products/<slug>) en steenafbeeldingen in een link naar /products/<slug>.
 (() => {
   const script = document.currentScript;
   const base = new URL('../spin/', script.src).href;
   const N = 48, TURN = 8000; // beelden per rondje, ms per rondje
-  const SLUGS = (script.dataset.slugs || 'chromite-foundry-grade,bauxite-guyanese').split(',');
+  const SLUGS = (script.dataset.slugs || 'foundry-grade-chromite-sand,guyanese-bauxite').split(',');
   const TARGETS = script.dataset.targets || '.product-hero_stone';
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-  const slugFromPath = p => (p.match(/\/minerals\/([^/?#]+)/) || [])[1];
+  const slugFromPath = p => (p.match(/\/(?:products|minerals)\/([^/?#]+)/) || [])[1];
   const sets = {};
   const load = slug => sets[slug] || (sets[slug] = Promise.all(Array.from({ length: N }, (_, i) => {
     const im = new Image();
@@ -65,7 +65,7 @@
   function init() {
     document.querySelectorAll(TARGETS).forEach(img => {
       if (img.dataset.stoneSpin) return;
-      const link = img.closest('a[href*="/minerals/"]');
+      const link = img.closest('a[href*="/products/"], a[href*="/minerals/"]');
       const slug = link ? slugFromPath(link.getAttribute('href')) : slugFromPath(location.pathname);
       if (!SLUGS.includes(slug)) return;
       img.dataset.stoneSpin = slug;
