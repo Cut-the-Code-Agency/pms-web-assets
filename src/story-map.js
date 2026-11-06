@@ -109,7 +109,7 @@
     // van begin naar eind wordt getekend, na de vierkantjes. In rust staat het mask op 0 (boog zichtbaar).
     svg.querySelectorAll('.sm-arc-reveal').forEach((r, i) =>
       play(r, [{ strokeDashoffset: '1' }, { strokeDashoffset: '0' }], { duration: 1100, delay: 1000 + i * 110, easing: EASE }));
-    if (kind === 'europe') {
+    if (kind === 'europe' && svg.querySelector('.sm-target')) {
       const cv = svg.querySelector('.sm-cross-v'), ch = svg.querySelector('.sm-cross-h'), fr = svg.querySelector('.sm-target .sm-frame');
       play(cv, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: 900, delay: 900, easing: EASE });
       play(ch, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 900, delay: 900, easing: EASE });
@@ -334,7 +334,8 @@
     svg.dataset.storyMapReady = 'true';
     const slide = svg.closest('.story-slide_wrap') || svg.parentElement;
     hideAll(svg);
-    const motion = svg.dataset.storyMap === 'europe' ? europeLoop(svg, slide) : worldLoop(svg, slide);
+    // Europe zonder vizier (v2, keuze 2026-11-06: "bewegend vizier mag weg"): vierkantjes lichten om de beurt op, zoals World.
+    const motion = svg.dataset.storyMap === 'europe' && svg.querySelector('.sm-target') ? europeLoop(svg, slide) : worldLoop(svg, slide);
     const ticker = clock(svg, slide);
     const loop = { start() { motion.start(); ticker.start(); }, stop() { motion.stop(); ticker.stop(); } };
     // Zonder rasterlijnen (Europe/World v2, keuze 2026-11-06: "maakt het druk") geen lichtvlek.
