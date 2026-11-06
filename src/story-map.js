@@ -21,6 +21,8 @@
 //   .sm-square           vierkantje            .sm-frame   kader (Europe: van het vizier; World: per stip)
 //   .sm-target           vizier (Europe), transform translate(x, y) in kaartpixels
 //   [data-sm-dot]        locatie; Europe met data-lat / data-lon voor de uitlezing
+//   .sm-arc + .sm-arc-reveal  stippelboog met mask-pad (pathLength 1) dat de boog intekent (v1.87.0)
+//   .sm-dot              groep vierkantje + eigen kader; zo'n vierkantje krimpt niet in het vizier
 //   .sm-time / .sm-coord teksten in de hoeken onder (tijd tikt; Europe: coördinaten volgen het vizier)
 
 (() => {
@@ -83,6 +85,7 @@
     svg.querySelectorAll('.sm-cross-v').forEach((l) => (l.style.transform = 'scaleY(0)'));
     svg.querySelectorAll('.sm-cross-h').forEach((l) => (l.style.transform = 'scaleX(0)'));
     svg.querySelectorAll('.sm-target .sm-frame').forEach((f) => (f.style.transform = 'scale(0)'));
+    svg.querySelectorAll('.sm-arc-reveal').forEach((r) => (r.style.strokeDashoffset = '1'));
   }
 
   // Opbouw; resolves als het raster staat (dan mag de lus en de flare beginnen).
@@ -102,6 +105,10 @@
     });
     svg.querySelectorAll('.sm-dot .sm-frame').forEach((f, i) =>
       play(f, [{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 600, delay: 600 + i * 90, easing: EASE }));
+    // Stippelbogen (sinds v1.87.0): elke boog heeft een mask-pad (.sm-arc-reveal, pathLength 1) dat
+    // van begin naar eind wordt getekend, na de vierkantjes. In rust staat het mask op 0 (boog zichtbaar).
+    svg.querySelectorAll('.sm-arc-reveal').forEach((r, i) =>
+      play(r, [{ strokeDashoffset: '1' }, { strokeDashoffset: '0' }], { duration: 1100, delay: 1000 + i * 110, easing: EASE }));
     if (kind === 'europe') {
       const cv = svg.querySelector('.sm-cross-v'), ch = svg.querySelector('.sm-cross-h'), fr = svg.querySelector('.sm-target .sm-frame');
       play(cv, [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: 900, delay: 900, easing: EASE });
@@ -137,7 +144,7 @@
     const frame = target.querySelector('.sm-frame');
     const coord = svg.querySelector('.sm-coord');
     const dots = [...svg.querySelectorAll('[data-sm-dot]')].map((q) => ({
-      el: q, lat: +q.dataset.lat, lon: +q.dataset.lon,
+      el: q, shrink: !q.closest('.sm-dot'), lat: +q.dataset.lat, lon: +q.dataset.lon,
       x: +q.getAttribute('x') + +q.getAttribute('width') / 2, y: +q.getAttribute('y') + +q.getAttribute('height') / 2,
     }));
     let at = 0, running = false, busy = false, timer = 0;
@@ -152,7 +159,7 @@
       const from = dots[at], to = dots[(at + n) % dots.length];
       at = (at + n) % dots.length;
       play(frame, [{ transform: 'scale(1)' }, { transform: 'scale(0)' }], { duration: 250, easing: EASE });
-      play(from.el, [{ transform: 'scale(0.79)' }, { transform: 'scale(1)' }], { duration: 250, easing: EASE });
+      if (from.shrink) play(from.el, [{ transform: 'scale(0.79)' }, { transform: 'scale(1)' }], { duration: 250, easing: EASE });
       const move = play(target, [
         { transform: `translate(${from.x}px, ${from.y}px)` },
         { transform: `translate(${to.x}px, ${to.y}px)` },
@@ -173,7 +180,7 @@
       cancelAnimationFrame(raf);
       if (coord) coord.textContent = readout(to.lat, to.lon);
       play(frame, [{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 450, easing: EASE });
-      play(to.el, [{ transform: 'scale(1)' }, { transform: 'scale(0.79)' }], { duration: 450, easing: EASE });
+      if (to.shrink) play(to.el, [{ transform: 'scale(1)' }, { transform: 'scale(0.79)' }], { duration: 450, easing: EASE });
       busy = false;
       if (running) timer = window.setTimeout(next, HOLD_MS);
     }
