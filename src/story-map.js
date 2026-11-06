@@ -337,7 +337,8 @@
     const motion = svg.dataset.storyMap === 'europe' ? europeLoop(svg, slide) : worldLoop(svg, slide);
     const ticker = clock(svg, slide);
     const loop = { start() { motion.start(); ticker.start(); }, stop() { motion.stop(); ticker.stop(); } };
-    const fl = finePointer.matches ? flare(svg, slide) : null;
+    // Zonder rasterlijnen (Europe/World v2, keuze 2026-11-06: "maakt het druk") geen lichtvlek.
+    const fl = finePointer.matches && svg.querySelector('.sm-grid line') ? flare(svg, slide) : null;
     let built = false, visible = false;
     const sync = () => (built && visible && !document.hidden ? loop.start() : loop.stop());
     // Opbouw zodra de bovenkant van de dia 65 % van het scherm passeert.
